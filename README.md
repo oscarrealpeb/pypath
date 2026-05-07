@@ -103,13 +103,50 @@ Si `node` o `npm` no se reconocen, primero hay que instalar Node.js.
 
 #### 1. Clonar o descargar el proyecto
 
-Si el proyecto viene de GitHub, primero clónenlo:
+```bash
+git clone https://github.com/oscarrealpeb/pypath.git
+cd pypath
+```
+#### 1.1 Revisar la rama y crear una rama propia
+
+La base del proyecto es `main`.
+
+Para ver en qué rama están parados:
 
 ```bash
-git clone <url-del-repo>
+git branch
 ```
 
-Si ya lo descargaron o ya lo tienen en el equipo, este paso se puede saltar.
+La rama actual aparece con `*`.
+
+La idea de trabajo es esta:
+
+1. pararse en `main`
+2. traer lo último de `main`
+3. crear una rama propia desde ahí
+
+Ejemplo:
+
+```bash
+git checkout main
+git pull origin main
+git checkout -b NombreDeTuRama
+git push -u origin NombreDeTuRama
+```
+
+Ejemplos de nombres de rama:
+
+- `OscarFase1`
+- `JassonFase1`
+- `GabrielaFase1`
+- `MailoFase1`
+- `JoseLuisFase1`
+
+Lo importante aquí es esto:
+
+- no trabajar directamente sobre `main`
+- crear la rama propia desde `main`
+- no crear ramas nuevas desde la rama personal de otra persona
 
 #### 2. Abrir la carpeta del proyecto
 

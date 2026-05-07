@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PyPath</title>
+    <script>
+      ;(() => {
+        try {
+          const storageKeys = ['pypath-app-state']
+          let themePreference = 'system'
+
+          for (const key of storageKeys) {
+            const rawValue = window.localStorage.getItem(key)
+
+            if (!rawValue) {
+              continue
+            }
+
+            const parsedValue = JSON.parse(rawValue)
+
+            if (parsedValue?.themePreference) {
+              themePreference = parsedValue.themePreference
+              break
+            }
+          }
+
+          document.documentElement.setAttribute('data-theme', themePreference)
+        } catch {}
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/principal.jsx"></script>
+  </body>
+</html>

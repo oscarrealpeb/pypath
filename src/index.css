@@ -1,0 +1,208 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-obsidian: 5 8 10;
+    --color-panel: 10 17 19;
+    --color-panel-2: 16 25 28;
+    --color-border: 24 48 54;
+    --color-primary: 0 255 159;
+    --color-primary-soft: 77 247 189;
+    --color-teal: 61 217 181;
+    --color-foam: 230 255 244;
+    --color-mute: 143 168 159;
+    --color-danger: 255 107 129;
+    --color-warning: 244 211 94;
+    color-scheme: dark;
+  }
+
+  :root[data-theme='light'] {
+    --color-obsidian: 242 248 245;
+    --color-panel: 255 255 255;
+    --color-panel-2: 247 252 249;
+    --color-border: 193 219 208;
+    --color-primary: 0 166 102;
+    --color-primary-soft: 0 196 122;
+    --color-teal: 29 166 148;
+    --color-foam: 20 43 35;
+    --color-mute: 92 114 105;
+    --color-danger: 214 74 105;
+    --color-warning: 185 132 24;
+    color-scheme: light;
+  }
+
+  :root[data-theme='dark'] {
+    color-scheme: dark;
+  }
+
+  :root[data-theme='system'] {
+    color-scheme: light dark;
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root[data-theme='system'] {
+      --color-obsidian: 242 248 245;
+      --color-panel: 255 255 255;
+      --color-panel-2: 247 252 249;
+      --color-border: 193 219 208;
+      --color-primary: 0 166 102;
+      --color-primary-soft: 0 196 122;
+      --color-teal: 29 166 148;
+      --color-foam: 20 43 35;
+      --color-mute: 92 114 105;
+      --color-danger: 214 74 105;
+      --color-warning: 185 132 24;
+    }
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  html {
+    @apply scroll-smooth;
+  }
+
+  body {
+    @apply m-0 min-h-screen bg-obsidian font-sans text-foam antialiased;
+    background-image:
+      radial-gradient(circle at top, rgba(0, 255, 159, 0.1), transparent 28%),
+      radial-gradient(circle at bottom right, rgba(61, 217, 181, 0.1), transparent 22%),
+      linear-gradient(rgba(24, 48, 54, 0.3) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(24, 48, 54, 0.3) 1px, transparent 1px);
+    background-size: auto, auto, 42px 42px, 42px 42px;
+    transition:
+      background-color 180ms ease,
+      color 180ms ease,
+      border-color 180ms ease;
+  }
+
+  :root[data-theme='light'] body {
+    background-image:
+      radial-gradient(circle at top, rgba(0, 166, 102, 0.12), transparent 28%),
+      radial-gradient(circle at bottom right, rgba(29, 166, 148, 0.12), transparent 22%),
+      linear-gradient(rgba(193, 219, 208, 0.42) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(193, 219, 208, 0.42) 1px, transparent 1px);
+  }
+
+  @media (prefers-color-scheme: light) {
+    :root[data-theme='system'] body {
+      background-image:
+        radial-gradient(circle at top, rgba(0, 166, 102, 0.12), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(29, 166, 148, 0.12), transparent 22%),
+        linear-gradient(rgba(193, 219, 208, 0.42) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(193, 219, 208, 0.42) 1px, transparent 1px);
+    }
+  }
+
+  a {
+    @apply text-inherit no-underline;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  code,
+  pre {
+    @apply font-mono;
+  }
+
+  ::selection {
+    @apply bg-primary/20 text-foam;
+  }
+}
+
+@layer components {
+  .page-shell {
+    @apply min-h-screen bg-hero-radial;
+  }
+
+  .content-width {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .panel {
+    @apply rounded-3xl border border-border/80 bg-panel/80 shadow-card backdrop-blur;
+  }
+
+  .panel-muted {
+    @apply rounded-2xl border border-border/70 bg-panel-2/80;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-primary;
+  }
+
+  .status-chip {
+    @apply inline-flex items-center rounded-full border border-border/80 bg-white/5 px-3 py-1 text-xs font-medium text-mute;
+  }
+
+  .field-input {
+    @apply w-full rounded-2xl border border-border bg-panel-2/80 px-4 py-3 text-sm text-foam outline-none transition placeholder:text-mute/70 focus:border-primary/60 focus:ring-2 focus:ring-primary/20;
+  }
+
+  .code-editor-shell .cm-editor {
+    @apply bg-transparent;
+  }
+
+  .code-editor-shell .cm-scroller {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+
+  .code-editor-shell .cm-content,
+  .code-editor-shell .cm-gutters {
+    @apply bg-transparent text-sm;
+  }
+
+  .code-editor-shell .cm-gutters {
+    @apply border-r border-border/60;
+  }
+
+  .code-editor-shell .cm-activeLine,
+  .code-editor-shell .cm-activeLineGutter {
+    @apply bg-primary/10;
+  }
+
+  .code-editor-shell .cm-focused {
+    outline: none;
+  }
+
+  .code-editor-shell .cm-focused .cm-cursor {
+    @apply border-primary;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+#root {
+  @apply min-h-screen;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-panel;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-border;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-primary/40;
+}

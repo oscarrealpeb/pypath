@@ -2,3 +2,4 @@
 // El contenido real de cursos vive en `src/datos/cursos/`.
 
 export { cursos } from './cursos/index.js'
+export { cursosBorrador } from './cursos/index.js'

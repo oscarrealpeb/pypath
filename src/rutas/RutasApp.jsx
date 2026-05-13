@@ -7,6 +7,8 @@ import { PaginaAdminMetricas } from '../modulos/administracion/paginas/PaginaAdm
 import { PaginaAdminUsuarios } from '../modulos/administracion/paginas/PaginaAdminUsuarios.jsx'
 import { PaginaEvaluacion } from '../modulos/evaluaciones/paginas/PaginaEvaluacion.jsx'
 import { PaginaAutenticacion } from '../modulos/autenticacion/paginas/PaginaAutenticacion.jsx'
+import { PaginaRecuperarContrasena } from '../modulos/autenticacion/paginas/PaginaRecuperarContrasena.jsx'
+import { PaginaVerificarCorreo } from '../modulos/autenticacion/paginas/PaginaVerificarCorreo.jsx'
 import { PaginaCurso } from '../modulos/cursos/paginas/PaginaCurso.jsx'
 import { PaginaPanel } from '../modulos/cursos/paginas/PaginaPanel.jsx'
 import { PaginaInicio } from '../modulos/inicio/paginas/PaginaInicio.jsx'
@@ -40,10 +42,15 @@ export function RutasApp() {
       <Route element={<RutaSoloPublica />}>
         <Route path="/login" element={<PaginaAutenticacion mode="login" />} />
         <Route path="/register" element={<PaginaAutenticacion mode="register" />} />
+        <Route path="/forgot-password" element={<PaginaRecuperarContrasena />} />
         <Route
           path="/control"
           element={<PaginaAutenticacion mode="login" portal="admin" requireAdminAccess />}
         />
+      </Route>
+
+      <Route element={<RutaProtegida allowUnverified />}>
+        <Route path="/verify-email" element={<PaginaVerificarCorreo />} />
       </Route>
 
       <Route element={<RutaAdministrador />}>

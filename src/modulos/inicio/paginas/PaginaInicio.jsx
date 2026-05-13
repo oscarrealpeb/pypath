@@ -235,7 +235,7 @@ export function PaginaInicio() {
     setSelectedCourseId(null)
   }
 
-  function handleApplyRecommendation() {
+  async function handleApplyRecommendation() {
     const recommendationPayload = {
       role: formState.role,
       interests: formState.interests,
@@ -244,7 +244,7 @@ export function PaginaInicio() {
     }
 
     if (user) {
-      updateUserProfile(recommendationPayload)
+      await updateUserProfile(recommendationPayload)
       navigate('/dashboard')
       return
     }

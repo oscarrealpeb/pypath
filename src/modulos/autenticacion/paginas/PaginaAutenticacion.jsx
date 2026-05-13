@@ -1,26 +1,63 @@
-import { useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { useMemo } from 'react'
 import { Boton } from '../../../componentes/Boton.jsx'
+import { MensajeValidacionCampo } from '../../../componentes/MensajeValidacionCampo.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
-import { SelectorIntereses } from '../../../componentes/SelectorIntereses.jsx'
-import {
-  opcionesExperiencia,
-  opcionesInteres,
-  opcionesRol,
-  sanearSeleccionIntereses,
-} from '../../../datos/opcionesPerfilUsuario.js'
 import { obtenerCatalogoCursos } from '../../contenido/servicios/repositorioContenido.js'
-import { construirPlanRecomendacion } from '../../inicio/servicios/servicioRecomendacionCursos.js'
+import { esCorreoAdminPrivilegiado } from '../servicios/clienteFirebase.js'
+import { verificarDisponibilidadCorreo } from '../servicios/servicioFirebaseAutenticacion.js'
+import { verificarDisponibilidadNombreVisible } from '../servicios/servicioPerfilesFirebase.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
+import {
+  crearNombreCompleto,
+  esCorreoValido,
+  evaluarFortalezaContrasena,
+  obtenerMensajeContrasenaMinima,
+  validarNombreVisible,
+} from '../servicios/servicioValidacionAutenticacion.js'
+
+function PasswordStrengthMeter({ password }) {
+  const strength = evaluarFortalezaContrasena(password)
+
+  if (!password) {
+    return null
+  }
+
+  const activeSegments = Math.max(1, Math.min(4, strength.score - 1))
+
+  return (
+    <div className="space-y-3 rounded-2xl border border-border/80 bg-white/5 p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs uppercase tracking-[0.22em] text-mute">Seguridad</p>
+        <span className="text-sm font-semibold text-foam">{strength.label}</span>
+      </div>
+      <div className="grid grid-cols-4 gap-2">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <span
+            key={index}
+            className={`h-2 rounded-full ${
+              index < activeSegments ? strength.toneClass : 'bg-white/10'
+            }`}
+          />
+        ))}
+      </div>
+      <div className="grid gap-2 text-xs text-mute sm:grid-cols-2">
+        <span className={strength.checks.minLength ? 'text-primary' : ''}>Mínimo 8 caracteres</span>
+        <span className={strength.checks.uppercase ? 'text-primary' : ''}>Una mayúscula</span>
+        <span className={strength.checks.lowercase ? 'text-primary' : ''}>Una minúscula</span>
+        <span className={strength.checks.number ? 'text-primary' : ''}>Un número</span>
+      </div>
+    </div>
+  )
+}
 
 export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAccess = false }) {
   const navigate = useNavigate()
   const location = useLocation()
-  const { onboarding, users } = useEstadoApp()
+  const { firebaseEnabled, onboarding } = useEstadoApp()
   const { authenticate, logout } = useAccionesApp()
-  const recommendedProfile = location.state?.recommendedProfile
-  const recommendedPlan = location.state?.recommendedPlan
+  const recommendedProfile = location.state?.recommendedProfile ?? null
+  const recommendedPlan = location.state?.recommendedPlan ?? null
   const selectedGoalCourseId = recommendedProfile?.goalCourseId ?? location.state?.goalCourseId ?? null
   const previewCourseTitle = location.state?.previewCourseTitle
   const goalCourseTitle = obtenerCatalogoCursos().find(
@@ -29,97 +66,200 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
   const [formState, setFormState] = useState({
     name: '',
     email: '',
+    identifier: '',
     password: '',
-    role: recommendedProfile?.role ?? 'programadores',
-    interests: sanearSeleccionIntereses(recommendedProfile?.interests ?? ['bases']),
-    experience: recommendedProfile?.experience ?? 'principiante',
-    goalCourseId: selectedGoalCourseId,
+    confirmPassword: '',
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
-  const [registerStep, setRegisterStep] = useState(1)
-  const profileRecommendationPlan = useMemo(() => {
-    if (!(mode === 'register' && portal !== 'admin')) {
-      return null
-    }
-
-    return construirPlanRecomendacion({
-      role: formState.role,
-      interests: formState.interests,
-      experience: formState.experience,
-    })
-  }, [formState.experience, formState.interests, formState.role, mode, portal])
+  const [nameAvailabilityFeedback, setNameAvailabilityFeedback] = useState({
+    status: 'idle',
+    message: '',
+  })
+  const [emailAvailabilityFeedback, setEmailAvailabilityFeedback] = useState({
+    status: 'idle',
+    message: '',
+  })
 
   const isAdminPortal = portal === 'admin'
   const isRegister = mode === 'register' && !isAdminPortal
   const requestedPath = location.state?.from
   const shouldReturnToRequestedPath =
     !isRegister && !isAdminPortal && onboarding.completed && typeof requestedPath === 'string'
+  const nameFeedback = useMemo(() => {
+    if (!isRegister) {
+      return { status: 'idle', message: '' }
+    }
+
+    const trimmedName = crearNombreCompleto(formState.name)
+
+    if (!trimmedName) {
+      return { status: 'idle', message: '' }
+    }
+
+    const nameMessage = validarNombreVisible(trimmedName)
+
+    if (nameMessage) {
+      return {
+        status: 'invalid',
+        message: nameMessage,
+      }
+    }
+
+    return nameAvailabilityFeedback
+  }, [formState.name, isRegister, nameAvailabilityFeedback])
+  const emailFeedback = useMemo(() => {
+    if (!isRegister) {
+      return { status: 'idle', message: '' }
+    }
+
+    const trimmedEmail = formState.email.trim()
+
+    if (!trimmedEmail) {
+      return { status: 'idle', message: '' }
+    }
+
+    if (!esCorreoValido(trimmedEmail)) {
+      return {
+        status: 'invalid',
+        message: 'Escribe un correo con formato válido.',
+      }
+    }
+
+    return emailAvailabilityFeedback
+  }, [emailAvailabilityFeedback, formState.email, isRegister])
 
   function handleChange(event) {
     const { name, value } = event.target
+    setError('')
+
+    if (name === 'email') {
+      const trimmedEmail = value.trim()
+
+      if (!trimmedEmail) {
+        setEmailAvailabilityFeedback({ status: 'idle', message: '' })
+      } else if (esCorreoValido(trimmedEmail)) {
+        setEmailAvailabilityFeedback({
+          status: 'checking',
+          message: 'Validando disponibilidad del correo...',
+        })
+      } else {
+        setEmailAvailabilityFeedback({ status: 'idle', message: '' })
+      }
+    }
+
+    if (name === 'name') {
+      const trimmedName = crearNombreCompleto(value)
+
+      if (!trimmedName) {
+        setNameAvailabilityFeedback({ status: 'idle', message: '' })
+      } else if (!validarNombreVisible(trimmedName)) {
+        setNameAvailabilityFeedback({
+          status: 'checking',
+          message: 'Validando disponibilidad del nombre visible...',
+        })
+      } else {
+        setNameAvailabilityFeedback({ status: 'idle', message: '' })
+      }
+    }
+
     setFormState((current) => ({
       ...current,
       [name]: value,
     }))
   }
 
-  function toggleInterest(interest) {
-    setError('')
-    setFormState((current) => {
-      const alreadySelected = current.interests.includes(interest)
+  useEffect(() => {
+    if (!isRegister) {
+      return undefined
+    }
 
-      if (alreadySelected) {
-        return {
-          ...current,
-          interests: current.interests.filter((item) => item !== interest),
-        }
+    const trimmedName = crearNombreCompleto(formState.name)
+    const nameMessage = validarNombreVisible(trimmedName)
+
+    if (!trimmedName || nameMessage) {
+      return undefined
+    }
+
+    let isCancelled = false
+
+    const timeoutId = window.setTimeout(async () => {
+      const nextFeedback = await verificarDisponibilidadNombreVisible(trimmedName)
+
+      if (!isCancelled) {
+        setNameAvailabilityFeedback(nextFeedback)
       }
+    }, 350)
 
-      if (current.interests.length >= 4) {
-        setError('Puedes elegir máximo 4 intereses en este primer perfil.')
-        return current
+    return () => {
+      isCancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [formState.name, isRegister])
+
+  useEffect(() => {
+    if (!isRegister) {
+      return undefined
+    }
+
+    const trimmedEmail = formState.email.trim()
+
+    if (!trimmedEmail || !esCorreoValido(trimmedEmail)) {
+      return undefined
+    }
+
+    let isCancelled = false
+
+    const timeoutId = window.setTimeout(async () => {
+      const nextFeedback = await verificarDisponibilidadCorreo(trimmedEmail)
+
+      if (!isCancelled) {
+        setEmailAvailabilityFeedback(nextFeedback)
       }
+    }, 350)
 
-      return {
-        ...current,
-        interests: [...current.interests, interest],
-      }
-    })
-  }
+    return () => {
+      isCancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [formState.email, isRegister])
 
-  function validateAccountFields() {
-    if (isRegister && !formState.name.trim()) {
-      setError('Ingresa tu nombre para crear el perfil.')
+  function validateRegisterFields() {
+    const nameMessage = validarNombreVisible(formState.name)
+
+    if (nameMessage) {
+      setError(nameMessage)
       return false
     }
 
-    if (!formState.email.trim() || !formState.password.trim()) {
-      setError('Completa correo y contraseña para continuar.')
+    if (!esCorreoValido(formState.email)) {
+      setError('Ingresa un correo válido para crear la cuenta.')
+      return false
+    }
+
+    const passwordMessage = obtenerMensajeContrasenaMinima(formState.password)
+
+    if (passwordMessage) {
+      setError(passwordMessage)
+      return false
+    }
+
+    if (formState.password !== formState.confirmPassword) {
+      setError('La confirmación no coincide con la contraseña.')
       return false
     }
 
     return true
   }
 
-  function emailYaExiste() {
-    const normalizedEmail = formState.email.trim().toLowerCase()
-
-    if (!normalizedEmail) {
+  function validateLoginFields() {
+    if (!formState.identifier.trim() || !formState.password.trim()) {
+      setError('Escribe tu correo y tu contraseña.')
       return false
     }
 
-    return users.some((user) => user.email?.trim().toLowerCase() === normalizedEmail)
-  }
-
-  function validateProfileFields() {
-    if (!formState.role) {
-      setError('Elige un rol principal para recomendarte mejor.')
-      return false
-    }
-
-    if (formState.interests.length === 0 || formState.interests.length > 4) {
-      setError('Elige entre 1 y 4 intereses para tu primer recorrido.')
+    if (!esCorreoValido(formState.identifier)) {
+      setError('Por seguridad, el acceso con contraseña ahora se hace solo con correo.')
       return false
     }
 
@@ -131,20 +271,32 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
 
     try {
       const authenticatedUser = await authenticate(payload, mode)
+      const resolvedAuthEmail =
+        authenticatedUser.email ?? payload.email ?? payload.identifier ?? ''
 
-      if (!requireAdminAccess && authenticatedUser.systemRole === 'admin') {
-        logout()
+      if (!requireAdminAccess && esCorreoAdminPrivilegiado(resolvedAuthEmail)) {
+        await logout()
         setError('Esta cuenta usa el acceso interno del panel.')
         return
       }
 
-      if (requireAdminAccess && authenticatedUser.systemRole !== 'admin') {
-        logout()
+      if (requireAdminAccess && !esCorreoAdminPrivilegiado(resolvedAuthEmail)) {
+        await logout()
         setError('Este acceso está reservado para administración.')
         return
       }
 
-      const resolvedRoute = authenticatedUser.systemRole === 'admin' ? '/admin' : nextRoute
+      if (requireAdminAccess && esCorreoAdminPrivilegiado(resolvedAuthEmail)) {
+        navigate('/admin', { replace: true })
+        return
+      }
+
+      if (authenticatedUser.requiresEmailVerification) {
+        navigate('/verify-email', { replace: true })
+        return
+      }
+
+      const resolvedRoute = esCorreoAdminPrivilegiado(resolvedAuthEmail) ? '/admin' : nextRoute
       navigate(resolvedRoute, { replace: true })
     } catch (authError) {
       setError(authError.message || 'No pudimos completar la autenticación.')
@@ -158,328 +310,273 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
     setError('')
 
     if (!isRegister) {
-      if (!validateAccountFields()) {
+      if (!validateLoginFields()) {
         return
       }
 
-      await runAuth(formState, shouldReturnToRequestedPath ? requestedPath : '/dashboard')
+      await runAuth(
+        {
+          identifier: formState.identifier,
+          password: formState.password,
+        },
+        shouldReturnToRequestedPath ? requestedPath : '/dashboard',
+      )
       return
     }
 
-    if (registerStep === 1) {
-      if (!validateAccountFields()) {
-        return
-      }
-
-      if (emailYaExiste()) {
-        setError('Ya existe una cuenta con ese correo. Inicia sesión o usa otro email.')
-        return
-      }
-
-      setRegisterStep(2)
+    if (!validateRegisterFields()) {
       return
     }
 
-    if (!validateProfileFields()) {
+    const nextNameFeedback = await verificarDisponibilidadNombreVisible(formState.name)
+    setNameAvailabilityFeedback(nextNameFeedback)
+
+    if (nextNameFeedback.status === 'invalid' || nextNameFeedback.status === 'taken') {
+      setError(nextNameFeedback.message)
       return
     }
 
-    await runAuth({
-      ...formState,
-      goalCourseId: formState.goalCourseId ?? profileRecommendationPlan?.targetCourse?.id ?? null,
-    })
-  }
+    const nextEmailFeedback = await verificarDisponibilidadCorreo(formState.email)
+    setEmailAvailabilityFeedback(nextEmailFeedback)
 
-  async function handleGoogleAuth() {
-    setError('')
-
-    if (isRegister && registerStep === 1) {
-      if (!formState.name.trim()) {
-        setError('Pon tu nombre antes de continuar con Google.')
-        return
-      }
-
-      if (emailYaExiste()) {
-        setError('Ya existe una cuenta con ese correo. Inicia sesión o usa otro email.')
-        return
-      }
-
-      setRegisterStep(2)
-      return
-    }
-
-    if (isRegister && !validateProfileFields()) {
+    if (nextEmailFeedback.status === 'invalid' || nextEmailFeedback.status === 'taken') {
+      setError(nextEmailFeedback.message)
       return
     }
 
     await runAuth(
       {
-        ...formState,
-        goalCourseId: formState.goalCourseId ?? profileRecommendationPlan?.targetCourse?.id ?? null,
-        provider: 'google',
+        name: formState.name,
+        email: formState.email,
+        password: formState.password,
+        role: recommendedProfile?.role,
+        interests: recommendedProfile?.interests,
+        experience: recommendedProfile?.experience,
+        goalCourseId: selectedGoalCourseId,
       },
-      shouldReturnToRequestedPath ? requestedPath : '/dashboard',
+      '/onboarding',
+    )
+  }
+
+  async function handleGoogleAccess() {
+    setError('')
+
+    if (isAdminPortal || requireAdminAccess) {
+      setError('El panel administrativo solo permite acceso con admin@pypath.com y contraseña.')
+      return
+    }
+
+    await runAuth(
+      {
+        provider: 'google',
+        name: formState.name,
+        role: recommendedProfile?.role,
+        interests: recommendedProfile?.interests,
+        experience: recommendedProfile?.experience,
+        goalCourseId: selectedGoalCourseId,
+      },
+      isRegister ? '/onboarding' : shouldReturnToRequestedPath ? requestedPath : '/dashboard',
     )
   }
 
   return (
     <div className="page-shell flex min-h-screen items-center py-10">
       <div className="content-width w-full">
-        <Tarjeta
-          className={`mx-auto p-8 lg:p-10 ${
-            isRegister && registerStep === 2 ? 'max-w-3xl' : 'max-w-xl'
-          }`}
-        >
-          <div className="space-y-6">
-            <div className="space-y-5">
-              <div className="pb-2 text-left">
-                <Link
-                  to="/"
-                  className="inline-flex w-fit items-center rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition hover:border-primary/35 hover:bg-primary/15 hover:text-primary-soft"
-                >
-                  {isAdminPortal ? 'Volver al sitio público' : 'Volver al inicio'}
-                </Link>
-              </div>
-              <div className="space-y-3 text-center">
-                <p className="eyebrow">
+        <Tarjeta className="mx-auto max-w-xl space-y-6 p-8 lg:p-10">
+          <div className="space-y-5">
+            <div className="pb-2 text-left">
+              <Link
+                to="/"
+                className="inline-flex w-fit items-center rounded-full border border-primary/20 bg-primary/10 px-4 py-2 text-sm font-medium text-primary transition hover:border-primary/35 hover:bg-primary/15 hover:text-primary-soft"
+              >
+                {isAdminPortal ? 'Volver al sitio público' : 'Volver al inicio'}
+              </Link>
+            </div>
+
+            <div className="space-y-3 text-center">
+              <p className="eyebrow">
+                {isAdminPortal ? 'Acceso interno' : isRegister ? 'Crear cuenta' : 'Iniciar sesión'}
+              </p>
+              <h1 className="font-display text-3xl font-semibold text-foam">
                 {isAdminPortal
-                  ? 'Acceso interno'
+                  ? 'Entrar al panel administrativo'
                   : isRegister
-                    ? `Crear cuenta / Paso ${registerStep} de 2`
-                    : 'Iniciar sesión'}
-                </p>
-                <h1 className="font-display text-3xl font-semibold text-foam">
-                  {isAdminPortal
-                    ? 'Entrar al panel administrativo'
-                    : isRegister
-                      ? registerStep === 1
-                        ? 'Crea tu cuenta'
-                        : 'Cuéntanos de ti'
-                      : 'Entrar a PyPath'}
-                </h1>
-                {isAdminPortal ? (
-                  <p className="text-sm text-mute">
-                    Accede con una cuenta con permisos de administración.
-                  </p>
-                ) : isRegister && registerStep === 2 ? (
-                  <p className="text-sm text-mute">
-                    Elige tu rol e intereses para recomendarte un mejor punto de partida.
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            {requestedPath && !isRegister && !isAdminPortal && (
-              <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam">
-                Necesitas iniciar sesión para entrar a ese curso.
-              </div>
-            )}
-
-            {recommendedProfile && !isAdminPortal && (
-              <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam">
-                Llegaste desde el recomendador. Precargamos tu perfil para apuntar a{' '}
-                <span className="font-semibold">{goalCourseTitle ?? 'tu curso sugerido'}</span>.
-                {recommendedPlan?.summary ? ` ${recommendedPlan.summary}` : ''}
-              </div>
-            )}
-
-            {!recommendedProfile && selectedGoalCourseId && !isAdminPortal && (
-              <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam">
-                {previewCourseTitle ? `El curso ${previewCourseTitle} ` : 'Este curso '}
-                quedará marcada en tu perfil cuando termines de crear la cuenta.
-              </div>
-            )}
-
-            <form
-              className={`mx-auto space-y-4 ${
-                isRegister && registerStep === 2 ? 'max-w-2xl' : 'max-w-lg'
-              }`}
-              onSubmit={handleSubmit}
-            >
-              {!isRegister || registerStep === 1 ? (
-                <>
-                  {isRegister && (
-                    <label className="block space-y-2">
-                      <span className="text-sm font-medium text-foam">Nombre</span>
-                      <input
-                        className="field-input"
-                        type="text"
-                        name="name"
-                        placeholder="Tu alias de operador"
-                        value={formState.name}
-                        onChange={handleChange}
-                      />
-                    </label>
-                  )}
-
-                  <label className="block space-y-2">
-                    <span className="text-sm font-medium text-foam">Correo</span>
-                    <input
-                      className="field-input"
-                      type="email"
-                      name="email"
-                      placeholder="operador@pypath.dev"
-                      value={formState.email}
-                      onChange={handleChange}
-                    />
-                  </label>
-
-                  <label className="block space-y-2">
-                    <span className="text-sm font-medium text-foam">Contraseña</span>
-                    <input
-                      className="field-input"
-                      type="password"
-                      name="password"
-                      placeholder="Elige la contraseña que prefieras para esta versión local"
-                      value={formState.password}
-                      onChange={handleChange}
-                    />
-                  </label>
-                </>
-              ) : (
-                <>
-                  <label className="block space-y-2">
-                    <span className="text-sm font-medium text-foam">Tu rol principal</span>
-                    <select
-                      className="field-input"
-                      name="role"
-                      value={formState.role}
-                      onChange={handleChange}
-                    >
-                      {opcionesRol.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="block space-y-2">
-                    <span className="text-sm font-medium text-foam">Nivel actual en Python</span>
-                    <select
-                      className="field-input"
-                      name="experience"
-                      value={formState.experience}
-                      onChange={handleChange}
-                    >
-                      {opcionesExperiencia.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <div className="space-y-2">
-                    <span className="text-sm font-medium text-foam">
-                      Intereses iniciales
-                    </span>
-                    <SelectorIntereses
-                      options={opcionesInteres}
-                      selectedValues={formState.interests}
-                      onToggle={toggleInterest}
-                    />
-                  </div>
-
-                  {profileRecommendationPlan && (
-                      <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="eyebrow">Recorrido sugerido para ti</span>
-                        <span className="status-chip">
-                          {profileRecommendationPlan.targetCourse.library}
-                        </span>
-                      </div>
-                      <h3 className="mt-4 font-display text-2xl font-semibold text-foam">
-                        {profileRecommendationPlan.headline}
-                      </h3>
-                      <p className="mt-3 text-sm leading-7 text-mute">
-                        {profileRecommendationPlan.summary}
-                      </p>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {profileRecommendationPlan.steps.map((course, index) => (
-                          <span key={course.id} className="status-chip">
-                            Paso {index + 1}: {course.title}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {error && (
-                <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100">
-                  {error}
-                </div>
-              )}
-
-              <div className="space-y-3">
-                <Boton type="submit" fullWidth size="lg" disabled={isLoading}>
-                  {isLoading
-                    ? 'Conectando...'
-                    : isAdminPortal
-                      ? 'Entrar al panel interno'
-                      : !isRegister
-                    ? 'Entrar al panel'
-                      : registerStep === 1
-                        ? 'Continuar al perfil inicial'
-                        : 'Crear cuenta y ver recomendación'}
-                </Boton>
-
-                {!isAdminPortal && (
-                  <Boton
-                    type="button"
-                    variant="secondary"
-                    fullWidth
-                    size="lg"
-                    disabled={isLoading}
-                    onClick={handleGoogleAuth}
-                  >
-                    {isRegister
-                      ? registerStep === 1
-                        ? 'Seguir con Google'
-                        : 'Crear cuenta con Google'
-                      : 'Entrar con Google'}
-                  </Boton>
-                )}
-
-                {isRegister && registerStep === 2 && (
-                  <Boton
-                    type="button"
-                    variant="ghost"
-                    fullWidth
-                    onClick={() => {
-                      setError('')
-                      setRegisterStep(1)
-                    }}
-                  >
-                    Volver al paso anterior
-                  </Boton>
-                )}
-              </div>
-            </form>
-
-            <div className="rounded-2xl border border-border/80 bg-white/5 px-4 py-4 text-sm text-mute">
-              {isAdminPortal
-                ? 'Este acceso es interno y está pensado solo para revisar el panel administrativo.'
-                : 'El acceso funciona en esta versión local y guarda progreso, recomendaciones y desbloqueos en tu navegador.'}
-            </div>
-
-            {!isAdminPortal && (
+                    ? 'Crear cuenta'
+                    : 'Entrar a PyPath'}
+              </h1>
               <p className="text-sm text-mute">
-                {isRegister ? '¿Ya tienes perfil?' : '¿Primera vez por aquí?'}{' '}
+                {isAdminPortal
+                  ? 'Usa el correo autorizado del proyecto para entrar al panel interno.'
+                  : isRegister
+                    ? 'Pedimos solo lo mínimo para crear tu acceso. El perfil de aprendizaje lo completas después.'
+                    : 'Puedes entrar con correo o Google.'}
+              </p>
+            </div>
+          </div>
+
+          {!firebaseEnabled ? (
+            <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-foam">
+              Este entorno todavía no tiene el acceso real configurado. Primero activa la
+              conexión del proyecto antes de probar estas opciones.
+            </div>
+          ) : null}
+
+          {requestedPath && !isRegister && !isAdminPortal ? (
+            <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam">
+              Necesitas iniciar sesión para entrar a ese curso.
+            </div>
+          ) : null}
+
+          {recommendedProfile && !isAdminPortal ? (
+            <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam">
+              Llegaste desde el recomendador. Guardaremos esa preferencia inicial para orientarte hacia{' '}
+              <span className="font-semibold">{goalCourseTitle ?? 'tu curso sugerido'}</span>.
+              {recommendedPlan?.summary ? ` ${recommendedPlan.summary}` : ''}
+            </div>
+          ) : null}
+
+          {!recommendedProfile && selectedGoalCourseId && !isAdminPortal ? (
+            <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam">
+              {previewCourseTitle ? `El curso ${previewCourseTitle} ` : 'Este curso '}
+              quedará como objetivo inicial de tu perfil.
+            </div>
+          ) : null}
+
+          <form className="space-y-4" noValidate onSubmit={handleSubmit}>
+            {isRegister ? (
+              <>
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-foam">Nombre visible</span>
+                  <input
+                    className="field-input"
+                    type="text"
+                    name="name"
+                    placeholder="Tu nombre o alias"
+                    value={formState.name}
+                    onChange={handleChange}
+                  />
+                  <MensajeValidacionCampo feedback={nameFeedback} />
+                </label>
+
+                <label className="block space-y-2">
+                  <span className="text-sm font-medium text-foam">Correo</span>
+                  <input
+                    className="field-input"
+                    type="email"
+                    name="email"
+                    placeholder="operador@pypath.dev"
+                    value={formState.email}
+                    onChange={handleChange}
+                  />
+                  <MensajeValidacionCampo feedback={emailFeedback} />
+                </label>
+              </>
+            ) : (
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-foam">Correo</span>
+                <input
+                  className="field-input"
+                  type="email"
+                  name="identifier"
+                  placeholder="correo@pypath.dev"
+                  value={formState.identifier}
+                  onChange={handleChange}
+                />
+              </label>
+            )}
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-foam">Contraseña</span>
+              <input
+                className="field-input"
+                type="password"
+                name="password"
+                placeholder={isRegister ? 'Crea una contraseña segura' : 'Tu contraseña'}
+                value={formState.password}
+                onChange={handleChange}
+              />
+            </label>
+
+            {isRegister ? <PasswordStrengthMeter password={formState.password} /> : null}
+
+            {isRegister ? (
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-foam">Confirmar contraseña</span>
+                <input
+                  className="field-input"
+                  type="password"
+                  name="confirmPassword"
+                  placeholder="Escribe de nuevo tu contraseña"
+                  value={formState.confirmPassword}
+                  onChange={handleChange}
+                />
+              </label>
+            ) : null}
+
+            {error ? (
+              <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100">
+                {error}
+              </div>
+            ) : null}
+
+            {!isRegister && !isAdminPortal ? (
+              <p className="text-right text-sm text-mute">
                 <Link
-                  to={isRegister ? '/login' : '/register'}
-                  state={location.state}
+                  to="/forgot-password"
                   className="font-semibold text-primary transition hover:text-primary-soft"
                 >
-                  {isRegister ? 'Inicia sesión' : 'Crear cuenta'}
+                  Olvidé mi contraseña
                 </Link>
               </p>
-            )}
-          </div>
+            ) : null}
+
+            <div className="space-y-3">
+              <Boton type="submit" fullWidth size="lg" disabled={isLoading || !firebaseEnabled}>
+                {isLoading
+                  ? 'Conectando...'
+                  : isAdminPortal
+                    ? 'Entrar al panel interno'
+                    : isRegister
+                      ? 'Crear cuenta'
+                      : 'Entrar al panel'}
+              </Boton>
+
+              {!isAdminPortal ? (
+                <Boton
+                  type="button"
+                  variant="secondary"
+                  fullWidth
+                  size="lg"
+                  disabled={isLoading || !firebaseEnabled}
+                  onClick={handleGoogleAccess}
+                >
+                  Continuar con Google
+                </Boton>
+              ) : null}
+            </div>
+          </form>
+
+          {!isAdminPortal ? (
+            <div className="rounded-2xl border border-border/80 bg-white/5 px-4 py-4 text-sm text-mute">
+              Si creas la cuenta con correo, tendrás que confirmar el email antes de entrar.
+            </div>
+          ) : null}
+
+          {!isAdminPortal ? (
+            <p className="text-sm text-mute">
+              {isRegister ? '¿Ya tienes cuenta?' : '¿Primera vez por aquí?'}{' '}
+              <Link
+                to={isRegister ? '/login' : '/register'}
+                state={location.state}
+                className="font-semibold text-primary transition hover:text-primary-soft"
+              >
+                {isRegister ? 'Inicia sesión' : 'Crear cuenta'}
+              </Link>
+            </p>
+          ) : null}
         </Tarjeta>
       </div>
     </div>
   )
 }
+

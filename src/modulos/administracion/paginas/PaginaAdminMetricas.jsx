@@ -15,11 +15,10 @@ export function PaginaAdminMetricas() {
             Señales básicas de uso de la plataforma
           </h1>
           <p className="max-w-3xl text-lg leading-8 text-mute">
-            Esta vista cubre la HU-18 con métricas ligeras pero útiles: usuarios activos,
-            cuentas deshabilitadas, admins, cursos más populares y actividad reciente.
+            Vista rápida del estado de la plataforma: usuarios activos, cuentas deshabilitadas,
+            administradores, cursos con más tracción y movimientos recientes.
           </p>
         </div>
-
       </Tarjeta>
 
       <div className="grid gap-4 md:grid-cols-5">
@@ -93,22 +92,19 @@ export function PaginaAdminMetricas() {
                   key={event.id}
                   className="rounded-2xl border border-border/80 bg-white/5 px-4 py-4"
                 >
-                  <p className="text-sm font-semibold text-foam">{event.type}</p>
+                  <p className="text-sm font-semibold text-foam">{event.label}</p>
                   <p className="mt-2 text-sm text-mute">
                     {new Date(event.timestamp).toLocaleString('es-CO')}
                   </p>
-                  <p className="mt-2 text-xs leading-6 text-mute">
-                    {Object.entries(event)
-                      .filter(([key]) => !['id', 'type', 'timestamp'].includes(key))
-                      .map(([key, value]) => `${key}: ${value}`)
-                      .join(' / ') || 'Sin metadatos adicionales'}
+                  <p className="mt-2 text-sm leading-6 text-mute">
+                    {event.details.join(' / ') || 'Sin detalles adicionales.'}
                   </p>
                 </div>
               ))
             ) : (
               <div className="rounded-2xl border border-border/80 bg-white/5 px-4 py-4 text-sm text-mute">
-                Aún no hay actividad registrada. Inicia sesión, completa una misión o edita contenido
-                para poblar esta vista.
+                Aún no hay actividad registrada. Inicia sesión, completa una misión o edita
+                contenido para poblar esta vista.
               </div>
             )}
           </div>

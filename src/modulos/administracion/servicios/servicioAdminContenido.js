@@ -32,6 +32,24 @@ function parseList(text, separator = '\n') {
     .filter(Boolean)
 }
 
+function serializarJsonLegible(value) {
+  return JSON.stringify(value ?? [], null, 2)
+}
+
+const TIPOS_LAYOUT_APOYO = new Set(['video', 'note', 'documentation', 'example', 'blocks', 'block'])
+
+function parsearJsonConRespaldo(text, fallback) {
+  if (!text?.trim()) {
+    return clone(fallback)
+  }
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return clone(fallback)
+  }
+}
+
 export function parsearListaMultilinea(text) {
   return parseList(text)
 }
@@ -57,6 +75,65 @@ export function serializarEnlacesDocumentacion(links = []) {
   return links.map((link) => `${link.label} | ${link.url}`).join('\n')
 }
 
+function normalizarItemLayoutApoyo(item, index) {
+  if (typeof item === 'string') {
+    const type = item.trim().toLowerCase()
+
+    if (!TIPOS_LAYOUT_APOYO.has(type)) {
+      return null
+    }
+
+    return {
+      id: `${type}-${index + 1}`,
+      type,
+      blockId: '',
+      blockIndex: null,
+    }
+  }
+
+  if (!item || typeof item !== 'object') {
+    return null
+  }
+
+  const type = typeof item.type === 'string' ? item.type.trim().toLowerCase() : ''
+
+  if (!TIPOS_LAYOUT_APOYO.has(type)) {
+    return null
+  }
+
+  return {
+    ...item,
+    id: item.id || `${type}-${index + 1}`,
+    type,
+    blockId: typeof item.blockId === 'string' ? item.blockId.trim() : '',
+    blockIndex: Number.isInteger(item.blockIndex) ? item.blockIndex : null,
+  }
+}
+
+export function parsearLayoutApoyo(text, fallback = []) {
+  if (!text?.trim()) {
+    return []
+  }
+
+  try {
+    const parsed = JSON.parse(text)
+
+    if (!Array.isArray(parsed)) {
+      return clone(fallback)
+    }
+
+    return parsed
+      .map((item, index) => normalizarItemLayoutApoyo(item, index))
+      .filter(Boolean)
+  } catch {
+    return clone(fallback)
+  }
+}
+
+export function serializarLayoutApoyo(layout = []) {
+  return JSON.stringify(layout ?? [], null, 2)
+}
+
 function createQuestion(prefix, index) {
   return {
     id: `${prefix}-q${index + 1}`,
@@ -69,6 +146,10 @@ function createQuestion(prefix, index) {
     correctOptionId: 'a',
     explanation: 'Explica aquí por qué la respuesta correcta es la opción A.',
   }
+}
+
+export function permiteRuntimePython(courseId) {
+  return courseId === 'python-fundamentals'
 }
 
 export function crearPlantillaCurso(name, allCourseIds = []) {
@@ -161,6 +242,7 @@ export function crearPlantillaLeccion(name, courseId, unitId, lessonCount = 0) {
       exampleCode: '# Ejemplo de referencia\nprint("Hola, PyPath")\n',
       supportNote: 'Puedes reforzar la explicación con una captura, una nota corta o ambos.',
       bloquesApoyo: [],
+      supportLayout: [],
       imageUrl: '',
     },
     instructions: {
@@ -173,7 +255,7 @@ export function crearPlantillaLeccion(name, courseId, unitId, lessonCount = 0) {
       hint: 'Agrega una pista concreta y corta que ayude sin resolver todo.',
     },
     challenge: {
-      runtimeMode: courseId === 'python-fundamentals' ? 'python' : 'guided',
+      runtimeMode: permiteRuntimePython(courseId) ? 'python' : 'guided',
       exerciseType: 'Completar código',
       title: `Reto: ${name?.trim() || `Nueva lección ${lessonCount + 1}`}`,
       prompt: 'Explica aquí qué debe construir o corregir la persona.',
@@ -184,7 +266,7 @@ export function crearPlantillaLeccion(name, courseId, unitId, lessonCount = 0) {
       expectedResult: 'PyPath',
       salidaGuiada: 'PyPath',
       executionNote:
-        courseId === 'python-fundamentals'
+        permiteRuntimePython(courseId)
           ? 'Esta misión ejecuta Python en el navegador usando Pyodide.'
           : 'Esta misión usa validación guiada porque la biblioteca no corre completa en el navegador.',
       successMessage: 'Lección guardada con una meta clara y lista para publicarse.',
@@ -205,6 +287,8 @@ export function construirBorradorLeccion(lesson) {
     exampleCode: lesson.resources.exampleCode,
     supportNote: lesson.resources.supportNote,
     imageUrl: lesson.resources.imageUrl ?? '',
+    supportBlocksJson: serializarJsonLegible(lesson.resources.bloquesApoyo ?? []),
+    supportLayoutJson: serializarLayoutApoyo(lesson.resources.supportLayout ?? []),
     instructionsOverview: lesson.instructions.overview,
     instructionsStepsText: (lesson.instructions.steps ?? []).join('\n'),
     instructionsHint: lesson.instructions.hint,
@@ -213,9 +297,12 @@ export function construirBorradorLeccion(lesson) {
     challengeTitle: lesson.challenge.title,
     prompt: lesson.challenge.prompt,
     starterCode: lesson.challenge.starterCode,
+    editorHeight: lesson.challenge.editorHeight ?? '310px',
     expectedKeywordsText: (lesson.challenge.expectedKeywords ?? []).join(', '),
     successCriteria: lesson.challenge.successCriteria,
     expectedResult: lesson.challenge.expectedResult,
+    solutionCode: lesson.challenge.solutionCode ?? '',
+    solutionNote: lesson.challenge.solutionNote ?? '',
     salidaGuiada: lesson.challenge.salidaGuiada,
     executionNote: lesson.challenge.executionNote,
     successMessage: lesson.challenge.successMessage,
@@ -223,6 +310,9 @@ export function construirBorradorLeccion(lesson) {
 }
 
 export function aplicarBorradorLeccion(lesson, draft, courseId) {
+  const runtimeMode =
+    draft.runtimeMode === 'python' && permiteRuntimePython(courseId) ? 'python' : 'guided'
+
   return {
     ...lesson,
     title: draft.title.trim() || lesson.title,
@@ -238,6 +328,14 @@ export function aplicarBorradorLeccion(lesson, draft, courseId) {
       exampleCode: draft.exampleCode,
       supportNote: draft.supportNote.trim() || lesson.resources.supportNote,
       imageUrl: draft.imageUrl?.trim() ?? '',
+      bloquesApoyo: parsearJsonConRespaldo(
+        draft.supportBlocksJson,
+        lesson.resources.bloquesApoyo ?? [],
+      ),
+      supportLayout: parsearLayoutApoyo(
+        draft.supportLayoutJson,
+        lesson.resources.supportLayout ?? [],
+      ),
     },
     instructions: {
       overview: draft.instructionsOverview.trim() || lesson.instructions.overview,
@@ -246,23 +344,50 @@ export function aplicarBorradorLeccion(lesson, draft, courseId) {
     },
     challenge: {
       ...lesson.challenge,
-      runtimeMode:
-        draft.runtimeMode === 'python' && courseId === 'python-fundamentals'
-          ? 'python'
-          : draft.runtimeMode === 'python'
-            ? 'guided'
-            : draft.runtimeMode,
+      runtimeMode,
       exerciseType: draft.exerciseType.trim() || lesson.challenge.exerciseType,
       title: draft.challengeTitle.trim() || lesson.challenge.title,
       prompt: draft.prompt.trim() || lesson.challenge.prompt,
       starterCode: draft.starterCode,
+      editorHeight: draft.editorHeight.trim() || lesson.challenge.editorHeight || '310px',
       expectedKeywords: parsearListaSeparadaPorComas(draft.expectedKeywordsText),
       successCriteria: draft.successCriteria.trim() || lesson.challenge.successCriteria,
       expectedResult: draft.expectedResult.trim() || lesson.challenge.expectedResult,
+      solutionCode: draft.solutionCode.trim() || lesson.challenge.solutionCode || '',
+      solutionNote: draft.solutionNote.trim() || lesson.challenge.solutionNote || '',
       salidaGuiada: draft.salidaGuiada.trim() || lesson.challenge.salidaGuiada,
       executionNote: draft.executionNote.trim() || lesson.challenge.executionNote,
       successMessage: draft.successMessage.trim() || lesson.challenge.successMessage,
     },
+  }
+}
+
+function construirMetaCursoCompatible(courseId, existingMeta, draftCatalog, draftCourse) {
+  const fallbackTitle = draftCatalog?.title ?? existingMeta?.title ?? draftCourse?.title ?? courseId
+  const { meta: templateMeta } = crearPlantillaCurso(fallbackTitle, [])
+
+  return {
+    ...templateMeta,
+    ...clone(existingMeta ?? {}),
+    ...clone(draftCatalog ?? {}),
+    id: courseId,
+    title: draftCatalog?.title ?? draftCourse?.title ?? existingMeta?.title ?? templateMeta.title,
+    library:
+      draftCatalog?.library ??
+      draftCourse?.library ??
+      existingMeta?.library ??
+      templateMeta.library,
+    description:
+      draftCatalog?.description ??
+      existingMeta?.description ??
+      draftCourse?.summary ??
+      templateMeta.description,
+    requiredCourseIds: clone(
+      draftCatalog?.requiredCourseIds ??
+        draftCourse?.requiredCourseIds ??
+        existingMeta?.requiredCourseIds ??
+        templateMeta.requiredCourseIds,
+    ),
   }
 }
 
@@ -279,6 +404,7 @@ export function construirBorradorCurso(course, meta) {
     duration: meta?.duration ?? '2 semanas',
     audienceText: (meta?.audience ?? []).join('\n'),
     prerequisitesText: (meta?.prerequisites ?? []).join('\n'),
+    recommendedBeforeText: (meta?.recommendedBefore ?? []).join('\n'),
     nextAfterText: (meta?.nextAfter ?? []).join('\n'),
     personaTagsText: (meta?.personaTags ?? []).join(', '),
     interestTagsText: (meta?.interestTags ?? []).join(', '),
@@ -310,6 +436,7 @@ export function aplicarBorradorCurso(course, meta, draft) {
       duration: draft.duration.trim() || meta.duration,
       audience: parsearListaMultilinea(draft.audienceText),
       prerequisites: parsearListaMultilinea(draft.prerequisitesText),
+      recommendedBefore: parsearListaMultilinea(draft.recommendedBeforeText),
       nextAfter: parsearListaMultilinea(draft.nextAfterText),
       personaTags: parsearListaSeparadaPorComas(draft.personaTagsText),
       interestTags: parsearListaSeparadaPorComas(draft.interestTagsText),
@@ -327,6 +454,7 @@ export function construirBorradorEvaluacion(assessment) {
     summary: assessment.summary,
     passingScore: String(assessment.passingScore ?? 2),
     successMessage: assessment.successMessage,
+    questionsJson: serializarJsonLegible(assessment.questions ?? []),
   }
 }
 
@@ -337,6 +465,7 @@ export function aplicarBorradorEvaluacion(assessment, draft) {
     summary: draft.summary.trim() || assessment.summary,
     passingScore: Number(draft.passingScore) || assessment.passingScore,
     successMessage: draft.successMessage.trim() || assessment.successMessage,
+    questions: parsearJsonConRespaldo(draft.questionsJson, assessment.questions ?? []),
   }
 }
 
@@ -360,6 +489,88 @@ export function crearCursoEnContenido(content, courseName) {
   }
 }
 
+export function materializarCursoCmsEnContenido(content, courseId, sourcePreference = 'catalog') {
+  const nextContent = cloneContent(content)
+  const existingCourse = nextContent.cursos.find((course) => course.id === courseId)
+  const existingMetaIndex = nextContent.catalogoCursos.findIndex((course) => course.id === courseId)
+  const existingMeta = existingMetaIndex >= 0 ? nextContent.catalogoCursos[existingMetaIndex] : null
+  const draftSource = nextContent.cursosBorrador?.[courseId] ?? null
+
+  if (existingCourse) {
+    return {
+      content: nextContent,
+      mode: 'existing',
+    }
+  }
+
+  if (sourcePreference === 'code' && draftSource?.course) {
+    const compatibleMeta = construirMetaCursoCompatible(
+      courseId,
+      existingMeta,
+      draftSource.catalog,
+      draftSource.course,
+    )
+
+    nextContent.cursos.push(clone(draftSource.course))
+    nextContent.evaluacionesCursos[courseId] = clone(
+      draftSource.assessments ?? {
+        unitAssessments: {},
+        finalAssessment: crearPlantillaCurso(compatibleMeta.title ?? courseId, []).finalAssessment,
+      },
+    )
+
+    if (existingMetaIndex >= 0) {
+      nextContent.catalogoCursos[existingMetaIndex] = compatibleMeta
+    } else {
+      nextContent.catalogoCursos.push(compatibleMeta)
+    }
+
+    return {
+      content: nextContent,
+      mode: 'code',
+    }
+  }
+
+  const template = crearPlantillaCurso(
+    existingMeta?.title ?? courseId,
+    nextContent.cursos.map((course) => course.id),
+  )
+  template.course.id = courseId
+  template.course.title = existingMeta?.title ?? template.course.title
+  template.course.library = existingMeta?.library ?? template.course.library
+  template.course.requiredCourseIds = clone(
+    existingMeta?.requiredCourseIds ?? template.course.requiredCourseIds,
+  )
+  template.course.summary = existingMeta?.description ?? template.course.summary
+  template.meta = {
+    ...template.meta,
+    ...clone(existingMeta ?? {}),
+    id: courseId,
+    title: existingMeta?.title ?? template.meta.title,
+    library: existingMeta?.library ?? template.meta.library,
+    requiredCourseIds: clone(existingMeta?.requiredCourseIds ?? template.meta.requiredCourseIds),
+  }
+  template.finalAssessment.id = `${courseId}-final`
+  template.finalAssessment.title = `Evaluacion final del curso: ${template.course.title}`
+
+  nextContent.cursos.push(template.course)
+  nextContent.evaluacionesCursos[courseId] = {
+    unitAssessments: {},
+    finalAssessment: template.finalAssessment,
+  }
+
+  if (existingMetaIndex >= 0) {
+    nextContent.catalogoCursos[existingMetaIndex] = template.meta
+  } else {
+    nextContent.catalogoCursos.push(template.meta)
+  }
+
+  return {
+    content: nextContent,
+    mode: 'catalog',
+  }
+}
+
 export function actualizarCursoEnContenido(content, courseId, courseDraft) {
   const nextContent = cloneContent(content)
   const courseIndex = nextContent.cursos.findIndex((course) => course.id === courseId)
@@ -376,6 +587,34 @@ export function actualizarCursoEnContenido(content, courseId, courseDraft) {
   )
   nextContent.cursos[courseIndex] = applied.course
   nextContent.catalogoCursos[metaIndex] = applied.meta
+  return nextContent
+}
+
+export function eliminarCursoEnContenido(content, courseId) {
+  const nextContent = cloneContent(content)
+
+  nextContent.cursos = nextContent.cursos
+    .filter((course) => course.id !== courseId)
+    .map((course) => ({
+      ...course,
+      requiredCourseIds: (course.requiredCourseIds ?? []).filter(
+        (requiredCourseId) => requiredCourseId !== courseId,
+      ),
+    }))
+
+  nextContent.catalogoCursos = nextContent.catalogoCursos
+    .filter((meta) => meta.id !== courseId)
+    .map((meta) => ({
+      ...meta,
+      requiredCourseIds: (meta.requiredCourseIds ?? []).filter(
+        (requiredCourseId) => requiredCourseId !== courseId,
+      ),
+    }))
+
+  if (nextContent.evaluacionesCursos?.[courseId]) {
+    delete nextContent.evaluacionesCursos[courseId]
+  }
+
   return nextContent
 }
 

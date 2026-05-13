@@ -11,6 +11,99 @@ function isRecent(dateValue, days = 7) {
   return Number.isFinite(date.getTime()) && date.getTime() >= threshold
 }
 
+function normalizarEstadoCuenta(status) {
+  return status === 'disabled' ? 'Deshabilitada' : 'Activa'
+}
+
+function normalizarRolSistema(systemRole) {
+  return systemRole === 'admin' ? 'Administrador' : 'Estudiante'
+}
+
+function normalizarProveedor(provider) {
+  return provider === 'google' ? 'Google' : 'Correo'
+}
+
+function construirIndiceCursos(catalog = []) {
+  return Object.fromEntries(catalog.map((course) => [course.id, course.title]))
+}
+
+function resolverTituloCurso(courseId, courseTitles) {
+  return courseTitles[courseId] ?? courseId ?? 'Curso sin identificar'
+}
+
+function formatearEvento(event, courseTitles) {
+  const eventLabels = {
+    register: 'Cuenta creada',
+    login: 'Inicio de sesión',
+    google_login: 'Acceso con Google',
+    profile_updated: 'Perfil actualizado',
+    onboarding_completed: 'Onboarding completado',
+    assessment_started: 'Diagnóstico iniciado',
+    assessment_saved: 'Diagnóstico guardado',
+    lesson_completed: 'Lección completada',
+    unit_assessment_completed: 'Evaluación de unidad completada',
+    course_assessment_completed: 'Evaluación final completada',
+    password_updated: 'Contraseña actualizada',
+    password_reset_requested: 'Recuperación de contraseña solicitada',
+    course_created: 'Curso creado',
+    course_updated: 'Curso actualizado',
+    course_deleted: 'Curso eliminado',
+    course_publication_toggled: 'Publicación del curso actualizada',
+    course_materialized: 'Curso importado al CMS',
+    unit_created: 'Unidad creada',
+    unit_updated: 'Unidad actualizada',
+    unit_deleted: 'Unidad eliminada',
+    unit_bundle_updated: 'Contenido de la unidad actualizado',
+    unit_assessment_updated: 'Evaluación de unidad actualizada',
+    final_assessment_updated: 'Evaluación final actualizada',
+    lesson_created: 'Lección creada',
+    lesson_updated: 'Lección actualizada',
+    lesson_deleted: 'Lección eliminada',
+    user_role_updated: 'Rol de usuario actualizado',
+    user_status_toggled: 'Estado de cuenta actualizado',
+  }
+
+  const details = []
+
+  if (event.courseId) {
+    details.push(`Curso: ${resolverTituloCurso(event.courseId, courseTitles)}`)
+  }
+
+  if (event.unitId) {
+    details.push(`Unidad: ${event.unitId}`)
+  }
+
+  if (event.lessonId) {
+    details.push(`Lección: ${event.lessonId}`)
+  }
+
+  if (event.assessmentId) {
+    details.push(`Evaluación: ${event.assessmentId}`)
+  }
+
+  if (event.recommendedCourseId) {
+    details.push(`Sugerencia: ${resolverTituloCurso(event.recommendedCourseId, courseTitles)}`)
+  }
+
+  if (event.status) {
+    details.push(`Estado: ${normalizarEstadoCuenta(event.status)}`)
+  }
+
+  if (event.systemRole) {
+    details.push(`Rol: ${normalizarRolSistema(event.systemRole)}`)
+  }
+
+  if (event.provider) {
+    details.push(`Acceso: ${normalizarProveedor(event.provider)}`)
+  }
+
+  return {
+    ...event,
+    label: eventLabels[event.type] ?? 'Actividad registrada',
+    details,
+  }
+}
+
 export function obtenerResumenUsuario(user, userState) {
   const progress = userState?.progress ?? {
     completedLessons: [],
@@ -46,6 +139,7 @@ export function obtenerMetricasAdmin(users = [], userStates = {}, activity = [])
   const adminUsers = users.filter((user) => user.systemRole === 'admin')
   const recentUsers = users.filter((user) => isRecent(user.lastLoginAt))
   const catalog = obtenerCatalogoCursos()
+  const courseTitles = construirIndiceCursos(catalog)
 
   const coursePopularity = catalog
     .map((course) => {
@@ -81,6 +175,6 @@ export function obtenerMetricasAdmin(users = [], userStates = {}, activity = [])
     learnerUsers: users.length - adminUsers.length,
     usersWithRecentActivity: recentUsers.length,
     coursePopularity,
-    recentEvents: activity.slice(-8).reverse(),
+    recentEvents: activity.slice(-8).reverse().map((event) => formatearEvento(event, courseTitles)),
   }
 }

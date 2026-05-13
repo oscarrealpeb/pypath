@@ -2,11 +2,13 @@ import { startTransition, useMemo, useState } from 'react'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import {
-  construirBorradorEvaluacion,
-  construirBorradorCurso,
-  construirBorradorLeccion,
   actualizarEvaluacionUnidadEnContenido,
   actualizarUnidadEnContenido,
+  construirBorradorCurso,
+  construirBorradorEvaluacion,
+  construirBorradorLeccion,
+  materializarCursoCmsEnContenido,
+  permiteRuntimePython,
 } from '../servicios/servicioAdminContenido.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 
@@ -26,6 +28,10 @@ function findCourseMeta(content, courseId) {
   return content.catalogoCursos.find((course) => course.id === courseId) ?? null
 }
 
+function findDraftCourse(content, courseId) {
+  return content.cursosBorrador?.[courseId] ?? null
+}
+
 function findUnit(content, courseId, unitId) {
   return findCourse(content, courseId)?.units.find((unit) => unit.id === unitId) ?? null
 }
@@ -36,12 +42,123 @@ function findLesson(content, courseId, unitId, lessonId) {
   )
 }
 
-function CourseEditor({
-  course,
-  meta,
-  onSave,
-  onTogglePublication,
+function HelpTip({ title, children, align = 'left' }) {
+  const bubblePosition =
+    align === 'right'
+      ? 'right-0 origin-top-right'
+      : 'left-0 origin-top-left'
+
+  return (
+    <span className="group relative inline-flex items-center">
+      <span
+        tabIndex={0}
+        className="inline-flex h-5 w-5 cursor-help items-center justify-center rounded-full border border-primary/30 bg-primary/10 text-[11px] font-bold uppercase text-primary outline-none transition group-hover:border-primary/50 group-hover:bg-primary/15 group-focus-within:border-primary/50 group-focus-within:bg-primary/15"
+        aria-label={title}
+      >
+        i
+      </span>
+      <span
+        className={`pointer-events-none absolute top-[calc(100%+0.65rem)] z-20 hidden w-72 rounded-2xl border border-border/80 bg-panel px-4 py-3 text-xs leading-6 text-mute shadow-2xl group-hover:block group-focus-within:block ${bubblePosition}`}
+        role="tooltip"
+      >
+        <strong className="block text-sm font-semibold text-foam">{title}</strong>
+        <span className="mt-2 block">{children}</span>
+      </span>
+    </span>
+  )
+}
+
+function FieldLabel({ label, help, align = 'left' }) {
+  return (
+    <span className="flex items-center gap-2 text-sm font-medium text-foam">
+      <span>{label}</span>
+      {help ? (
+        <HelpTip title={help.title} align={align}>
+          {help.body}
+        </HelpTip>
+      ) : null}
+    </span>
+  )
+}
+
+function InputField({ label, value, onChange, className = '', help, helpAlign, ...props }) {
+  return (
+    <label className={`block space-y-2 ${className}`}>
+      <FieldLabel label={label} help={help} align={helpAlign} />
+      <input className="field-input" value={value} onChange={onChange} {...props} />
+    </label>
+  )
+}
+
+function TextareaField({
+  label,
+  value,
+  onChange,
+  className = '',
+  textareaClassName = '',
+  hint,
+  help,
+  helpAlign,
+  ...props
 }) {
+  return (
+    <label className={`block space-y-2 ${className}`}>
+      <FieldLabel label={label} help={help} align={helpAlign} />
+      <textarea
+        className={`field-input ${textareaClassName}`.trim()}
+        value={value}
+        onChange={onChange}
+        {...props}
+      />
+      {hint ? <p className="text-xs leading-6 text-mute">{hint}</p> : null}
+    </label>
+  )
+}
+
+function GuiaRapidaCms() {
+  return (
+    <Tarjeta className="space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="eyebrow">Guía rápida</p>
+          <h2 className="mt-3 font-display text-2xl font-semibold text-foam">
+            Cómo usar este CMS sin romper la plantilla
+          </h2>
+        </div>
+        <span className="status-chip">Pasa el mouse sobre la i</span>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-4">
+        <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
+          <p className="text-sm font-semibold text-foam">1. Crea o materializa</p>
+          <p className="mt-2 text-sm leading-6 text-mute">
+            Crea un curso nuevo desde cero o trae uno ya definido por código para volverlo editable.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
+          <p className="text-sm font-semibold text-foam">2. Completa lo visible</p>
+          <p className="mt-2 text-sm leading-6 text-mute">
+            Título, resumen, descripción, estado y pitch son lo mínimo para que el curso se vea bien.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
+          <p className="text-sm font-semibold text-foam">3. Arma unidades y lecciones</p>
+          <p className="mt-2 text-sm leading-6 text-mute">
+            Agrega unidades, luego lecciones, y usa la zona de apoyo para video, imagen, docs y bloques.
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
+          <p className="text-sm font-semibold text-foam">4. Publica y verifica</p>
+          <p className="mt-2 text-sm leading-6 text-mute">
+            Guarda, publica y luego abre la lección para comprobar el orden visual y el reto.
+          </p>
+        </div>
+      </div>
+    </Tarjeta>
+  )
+}
+
+function CourseEditor({ course, meta, onSave, onTogglePublication, onDeleteCourse }) {
   const [draft, setDraft] = useState(() => construirBorradorCurso(course, meta))
 
   return (
@@ -59,74 +176,83 @@ function CourseEditor({
           <Boton onClick={onTogglePublication}>
             {meta.status === 'live' ? 'Pasar a borrador' : 'Publicar curso'}
           </Boton>
+          <Boton variant="ghost" onClick={onDeleteCourse}>
+            Eliminar curso
+          </Boton>
         </div>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <InputField
+          label="Título"
+          value={draft.title}
+          onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+        />
+        <InputField
+          label="Biblioteca"
+          value={draft.library}
+          help={{
+            title: 'Biblioteca',
+            body:
+              'Nombre corto de la tecnología o área del curso. Ejemplos: Python, Web, Datos o Ciberseguridad.',
+          }}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, library: event.target.value }))
+          }
+        />
+        <TextareaField
+          className="lg:col-span-2"
+          label="Resumen del curso"
+          textareaClassName="min-h-28"
+          value={draft.summary}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, summary: event.target.value }))
+          }
+        />
+        <TextareaField
+          className="lg:col-span-2"
+          label="Descripción de la tarjeta"
+          textareaClassName="min-h-24"
+          value={draft.description}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, description: event.target.value }))
+          }
+        />
+        <InputField
+          label="Dificultad visible"
+          value={draft.difficulty}
+          help={{
+            title: 'Dificultad visible',
+            body:
+              'Texto corto que ve la persona usuaria en el curso. Puede ser Principiante, Intermedio o una etiqueta propia del equipo.',
+          }}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, difficulty: event.target.value }))
+          }
+        />
+        <InputField
+          label="Duración"
+          value={draft.duration}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, duration: event.target.value }))
+          }
+        />
+        <InputField
+          label="Intensidad"
+          value={draft.intensity}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, intensity: event.target.value }))
+          }
+        />
         <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Título</span>
-          <input
-            className="field-input"
-            value={draft.title}
-            onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+          <FieldLabel
+            label="Estado"
+            help={{
+              title: 'Estado del curso',
+              body:
+                'Borrador lo deja editable sin tratarlo como listo. Disponible ahora lo publica. En cola sirve para mostrarlo como próximo.',
+            }}
           />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Biblioteca</span>
-          <input
-            className="field-input"
-            value={draft.library}
-            onChange={(event) => setDraft((current) => ({ ...current, library: event.target.value }))}
-          />
-        </label>
-        <label className="block space-y-2 lg:col-span-2">
-          <span className="text-sm font-medium text-foam">Resumen del curso</span>
-          <textarea
-            className="field-input min-h-28"
-            value={draft.summary}
-            onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))}
-          />
-        </label>
-        <label className="block space-y-2 lg:col-span-2">
-          <span className="text-sm font-medium text-foam">Descripción de la tarjeta</span>
-          <textarea
-            className="field-input min-h-24"
-            value={draft.description}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, description: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Dificultad visible</span>
-          <input
-            className="field-input"
-            value={draft.difficulty}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, difficulty: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Duración</span>
-          <input
-            className="field-input"
-            value={draft.duration}
-            onChange={(event) => setDraft((current) => ({ ...current, duration: event.target.value }))}
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Intensidad</span>
-          <input
-            className="field-input"
-            value={draft.intensity}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, intensity: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Estado</span>
           <select
             className="field-input"
             value={draft.status}
@@ -139,110 +265,127 @@ function CourseEditor({
             ))}
           </select>
         </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Etiqueta de estado</span>
-          <input
-            className="field-input"
-            value={draft.statusLabel}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, statusLabel: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Orden recomendado</span>
-          <input
-            className="field-input"
-            value={draft.recommendedOrder}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, recommendedOrder: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Prerrequisitos (IDs)</span>
-          <input
-            className="field-input"
-            value={draft.requiredCourseIdsText}
-            onChange={(event) =>
-              setDraft((current) => ({
-                ...current,
-                requiredCourseIdsText: event.target.value,
-              }))
-            }
-          />
-        </label>
-        <label className="block space-y-2 lg:col-span-2">
-          <span className="text-sm font-medium text-foam">Ideal para (una línea por público)</span>
-          <textarea
-            className="field-input min-h-24"
-            value={draft.audienceText}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, audienceText: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Prerrequisitos visibles</span>
-          <textarea
-            className="field-input min-h-24"
-            value={draft.prerequisitesText}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, prerequisitesText: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Después de este curso</span>
-          <textarea
-            className="field-input min-h-24"
-            value={draft.nextAfterText}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, nextAfterText: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Tags de rol</span>
-          <input
-            className="field-input"
-            value={draft.personaTagsText}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, personaTagsText: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Tags de interés</span>
-          <input
-            className="field-input"
-            value={draft.interestTagsText}
-            onChange={(event) =>
-              setDraft((current) => ({ ...current, interestTagsText: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2 lg:col-span-2">
-          <span className="text-sm font-medium text-foam">Pitch del catálogo</span>
-          <textarea
-            className="field-input min-h-24"
-            value={draft.pitch}
-            onChange={(event) => setDraft((current) => ({ ...current, pitch: event.target.value }))}
-          />
-        </label>
+        <InputField
+          label="Etiqueta de estado"
+          value={draft.statusLabel}
+          help={{
+            title: 'Etiqueta de estado',
+            body:
+              'Texto visible en la tarjeta del catálogo. Ejemplos: Borrador, Disponible ahora, En cola o Próximamente.',
+          }}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, statusLabel: event.target.value }))
+          }
+        />
+        <InputField
+          label="Orden recomendado"
+          value={draft.recommendedOrder}
+          help={{
+            title: 'Orden recomendado',
+            body:
+              'Número que ayuda a ordenar el curso en catálogo y panel. Un número menor normalmente aparece antes.',
+          }}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, recommendedOrder: event.target.value }))
+          }
+        />
+        <InputField
+          label="Prerrequisitos técnicos (IDs)"
+          value={draft.requiredCourseIdsText}
+          help={{
+            title: 'Prerrequisitos técnicos',
+            body:
+              'Usa IDs internos de otros cursos separados por coma. Sirve para relacionar dependencias entre cursos.',
+          }}
+          onChange={(event) =>
+            setDraft((current) => ({
+              ...current,
+              requiredCourseIdsText: event.target.value,
+            }))
+          }
+        />
+        <TextareaField
+          className="lg:col-span-2"
+          label="Ideal para (una línea por público)"
+          textareaClassName="min-h-24"
+          value={draft.audienceText}
+          help={{
+            title: 'Ideal para',
+            body:
+              'Escribe un perfil por línea. Ejemplos: Analistas de datos, Estudiantes que inician, Desarrolladores junior.',
+          }}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, audienceText: event.target.value }))
+          }
+        />
+        <TextareaField
+          label="Prerrequisitos visibles"
+          textareaClassName="min-h-24"
+          value={draft.prerequisitesText}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, prerequisitesText: event.target.value }))
+          }
+        />
+        <TextareaField
+          label="Recomendado antes de"
+          textareaClassName="min-h-24"
+          value={draft.recommendedBeforeText}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, recommendedBeforeText: event.target.value }))
+          }
+        />
+        <TextareaField
+          label="Después de este curso"
+          textareaClassName="min-h-24"
+          value={draft.nextAfterText}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, nextAfterText: event.target.value }))
+          }
+        />
+        <InputField
+          label="Tags de rol"
+          value={draft.personaTagsText}
+          help={{
+            title: 'Tags de rol',
+            body:
+              'Palabras clave separadas por coma para perfilar a quién va dirigido. Ejemplos: programadores, analistas, estudiantes.',
+          }}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, personaTagsText: event.target.value }))
+          }
+        />
+        <InputField
+          label="Tags de interés"
+          value={draft.interestTagsText}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, interestTagsText: event.target.value }))
+          }
+        />
+        <InputField
+          label="Tags de experiencia"
+          value={draft.experienceTagsText}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, experienceTagsText: event.target.value }))
+          }
+        />
+        <TextareaField
+          className="lg:col-span-2"
+          label="Pitch del catálogo"
+          textareaClassName="min-h-24"
+          value={draft.pitch}
+          help={{
+            title: 'Pitch del catálogo',
+            body:
+              'Resumen breve con tono comercial o motivacional. Piensa en una frase que convenza a alguien de abrir el curso.',
+          }}
+          onChange={(event) => setDraft((current) => ({ ...current, pitch: event.target.value }))}
+        />
       </div>
     </Tarjeta>
   )
 }
 
-function UnitEditor({
-  content,
-  courseId,
-  unit,
-  assessment,
-  onReplaceContent,
-  onDelete,
-}) {
+function UnitEditor({ content, courseId, unit, assessment, onReplaceContent, onDelete }) {
   const [unitDraft, setUnitDraft] = useState({
     title: unit.title,
     summary: unit.summary,
@@ -283,26 +426,21 @@ function UnitEditor({
       </div>
 
       <div className="grid gap-4">
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Título de la unidad</span>
-          <input
-            className="field-input"
-            value={unitDraft.title}
-            onChange={(event) =>
-              setUnitDraft((current) => ({ ...current, title: event.target.value }))
-            }
-          />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Resumen de la unidad</span>
-          <textarea
-            className="field-input min-h-24"
-            value={unitDraft.summary}
-            onChange={(event) =>
-              setUnitDraft((current) => ({ ...current, summary: event.target.value }))
-            }
-          />
-        </label>
+        <InputField
+          label="Título de la unidad"
+          value={unitDraft.title}
+          onChange={(event) =>
+            setUnitDraft((current) => ({ ...current, title: event.target.value }))
+          }
+        />
+        <TextareaField
+          label="Resumen de la unidad"
+          textareaClassName="min-h-24"
+          value={unitDraft.summary}
+          onChange={(event) =>
+            setUnitDraft((current) => ({ ...current, summary: event.target.value }))
+          }
+        />
       </div>
 
       <div className="rounded-3xl border border-border/80 bg-white/5 p-5">
@@ -316,54 +454,61 @@ function UnitEditor({
             </div>
             <span className="status-chip">{assessment.questions.length} preguntas base</span>
           </div>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-foam">Título</span>
-            <input
-              className="field-input"
-              value={assessmentDraft.title}
-              onChange={(event) =>
-                setAssessmentDraft((current) => ({ ...current, title: event.target.value }))
-              }
-            />
-          </label>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-foam">Resumen</span>
-            <textarea
-              className="field-input min-h-24"
-              value={assessmentDraft.summary}
-              onChange={(event) =>
-                setAssessmentDraft((current) => ({ ...current, summary: event.target.value }))
-              }
-            />
-          </label>
+
+          <InputField
+            label="Título"
+            value={assessmentDraft.title}
+            onChange={(event) =>
+              setAssessmentDraft((current) => ({ ...current, title: event.target.value }))
+            }
+          />
+          <TextareaField
+            label="Resumen"
+            textareaClassName="min-h-24"
+            value={assessmentDraft.summary}
+            onChange={(event) =>
+              setAssessmentDraft((current) => ({ ...current, summary: event.target.value }))
+            }
+          />
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Puntaje mínimo</span>
-              <input
-                className="field-input"
-                value={assessmentDraft.passingScore}
-                onChange={(event) =>
-                  setAssessmentDraft((current) => ({
-                    ...current,
-                    passingScore: event.target.value,
-                  }))
-                }
-              />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Mensaje de éxito</span>
-              <input
-                className="field-input"
-                value={assessmentDraft.successMessage}
-                onChange={(event) =>
-                  setAssessmentDraft((current) => ({
-                    ...current,
-                    successMessage: event.target.value,
-                  }))
-                }
-              />
-            </label>
+            <InputField
+              label="Puntaje mínimo"
+              value={assessmentDraft.passingScore}
+              onChange={(event) =>
+                setAssessmentDraft((current) => ({
+                  ...current,
+                  passingScore: event.target.value,
+                }))
+              }
+            />
+            <InputField
+              label="Mensaje de éxito"
+              value={assessmentDraft.successMessage}
+              onChange={(event) =>
+                setAssessmentDraft((current) => ({
+                  ...current,
+                  successMessage: event.target.value,
+                }))
+              }
+            />
           </div>
+          <TextareaField
+            label="Preguntas (JSON)"
+            textareaClassName="min-h-56 font-mono text-sm"
+            value={assessmentDraft.questionsJson}
+            help={{
+              title: 'Preguntas en JSON',
+              body:
+                'Aquí editas el checkpoint completo. Si no necesitas cambiar la estructura, deja la base y ajusta solo textos, opciones y respuestas correctas.',
+            }}
+            onChange={(event) =>
+              setAssessmentDraft((current) => ({
+                ...current,
+                questionsJson: event.target.value,
+              }))
+            }
+            hint="Usa un arreglo con `id`, `prompt`, `options`, `correctOptionId` y `explanation`. Si el JSON es inválido, se conserva la versión anterior."
+          />
         </div>
       </div>
     </Tarjeta>
@@ -372,12 +517,14 @@ function UnitEditor({
 
 function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) {
   const [draft, setDraft] = useState(() => construirBorradorLeccion(lesson))
+  const supportsPythonRuntime = permiteRuntimePython(courseId)
+  const visibleRuntimeMode = supportsPythonRuntime ? draft.runtimeMode : 'guided'
 
   function setDraftField(field, value) {
     setDraft((current) => ({ ...current, [field]: value }))
   }
 
-  async function handleImageUpload(event) {
+  function handleImageUpload(event) {
     const file = event.target.files?.[0]
 
     if (!file) {
@@ -413,29 +560,51 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
+        <InputField
+          label="Título"
+          value={draft.title}
+          onChange={(event) => setDraftField('title', event.target.value)}
+        />
+        <InputField
+          label="Duración"
+          value={draft.duration}
+          onChange={(event) => setDraftField('duration', event.target.value)}
+        />
+        <InputField
+          label="XP"
+          value={draft.xp}
+          onChange={(event) => setDraftField('xp', event.target.value)}
+        />
         <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Título</span>
-          <input className="field-input" value={draft.title} onChange={(event) => setDraftField('title', event.target.value)} />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Duración</span>
-          <input className="field-input" value={draft.duration} onChange={(event) => setDraftField('duration', event.target.value)} />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">XP</span>
-          <input className="field-input" value={draft.xp} onChange={(event) => setDraftField('xp', event.target.value)} />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Modo de ejecución</span>
-          <select className="field-input" value={draft.runtimeMode} onChange={(event) => setDraftField('runtimeMode', event.target.value)}>
+          <FieldLabel
+            label="Modo de ejecución"
+            help={{
+              title: 'Modo de ejecución',
+              body:
+                'Guiado usa validación textual y es el modo compatible por defecto. Python real solo aparece cuando el curso soporta ejecución real en navegador.',
+            }}
+          />
+          <select
+            className="field-input"
+            value={visibleRuntimeMode}
+            onChange={(event) => setDraftField('runtimeMode', event.target.value)}
+          >
             <option value="guided">Guiado</option>
-            <option value="python">Python real</option>
+            {supportsPythonRuntime ? <option value="python">Python real</option> : null}
           </select>
+          <p className="text-xs leading-6 text-mute">
+            {supportsPythonRuntime
+              ? 'Este curso si puede ejecutar Python real en el navegador.'
+              : 'Este curso se mantiene en modo guiado para seguir compatible con la plantilla actual.'}
+          </p>
         </label>
-        <label className="block space-y-2 lg:col-span-2">
-          <span className="text-sm font-medium text-foam">Objetivo</span>
-          <textarea className="field-input min-h-24" value={draft.objective} onChange={(event) => setDraftField('objective', event.target.value)} />
-        </label>
+        <TextareaField
+          className="lg:col-span-2"
+          label="Objetivo"
+          textareaClassName="min-h-24"
+          value={draft.objective}
+          onChange={(event) => setDraftField('objective', event.target.value)}
+        />
       </div>
 
       <div className="rounded-3xl border border-border/80 bg-white/5 p-5">
@@ -444,27 +613,45 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
             <p className="eyebrow">Video y apoyo</p>
             <h3 className="mt-3 font-display text-xl font-semibold text-foam">Recursos</h3>
           </div>
+
           <div className="grid gap-4 lg:grid-cols-2">
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Título del video</span>
-              <input className="field-input" value={draft.videoTitle} onChange={(event) => setDraftField('videoTitle', event.target.value)} />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">URL embed de YouTube</span>
-              <input className="field-input" value={draft.videoUrl} onChange={(event) => setDraftField('videoUrl', event.target.value)} />
-            </label>
-            <label className="block space-y-2 lg:col-span-2">
-              <span className="text-sm font-medium text-foam">Documentación (Etiqueta | URL por línea)</span>
-              <textarea className="field-input min-h-28" value={draft.documentationLinksText} onChange={(event) => setDraftField('documentationLinksText', event.target.value)} />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Título del ejemplo</span>
-              <input className="field-input" value={draft.exampleTitle} onChange={(event) => setDraftField('exampleTitle', event.target.value)} />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Imagen de apoyo (URL)</span>
-              <input className="field-input" value={draft.imageUrl} onChange={(event) => setDraftField('imageUrl', event.target.value)} />
-            </label>
+            <InputField
+              label="Título del video"
+              value={draft.videoTitle}
+              onChange={(event) => setDraftField('videoTitle', event.target.value)}
+            />
+            <InputField
+              label="URL embed de YouTube"
+              value={draft.videoUrl}
+              help={{
+                title: 'URL embed de YouTube',
+                body:
+                  'Usa la versión embebida, por ejemplo https://www.youtube.com/embed/ID. Si lo dejas vacío, la lección puede vivir sin video.',
+              }}
+              onChange={(event) => setDraftField('videoUrl', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Documentación (Etiqueta | URL por línea)"
+              textareaClassName="min-h-28"
+              value={draft.documentationLinksText}
+              help={{
+                title: 'Documentación por línea',
+                body:
+                  'Cada línea debe seguir este formato: Etiqueta | URL. Ejemplo: Docs oficiales | https://docs.python.org/3/.',
+              }}
+              onChange={(event) => setDraftField('documentationLinksText', event.target.value)}
+            />
+            <InputField
+              label="Título del ejemplo"
+              value={draft.exampleTitle}
+              onChange={(event) => setDraftField('exampleTitle', event.target.value)}
+            />
+            <InputField
+              label="Imagen de apoyo (URL)"
+              value={draft.imageUrl}
+              onChange={(event) => setDraftField('imageUrl', event.target.value)}
+            />
             <label className="block space-y-2 lg:col-span-2">
               <span className="text-sm font-medium text-foam">Subir imagen de apoyo</span>
               <input
@@ -474,14 +661,33 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
                 onChange={handleImageUpload}
               />
             </label>
-            <label className="block space-y-2 lg:col-span-2">
-              <span className="text-sm font-medium text-foam">Código de ejemplo</span>
-              <textarea className="field-input min-h-40 font-mono text-sm" value={draft.exampleCode} onChange={(event) => setDraftField('exampleCode', event.target.value)} />
-            </label>
-            <label className="block space-y-2 lg:col-span-2">
-              <span className="text-sm font-medium text-foam">Nota de apoyo</span>
-              <textarea className="field-input min-h-24" value={draft.supportNote} onChange={(event) => setDraftField('supportNote', event.target.value)} />
-            </label>
+            <TextareaField
+              className="lg:col-span-2"
+              label="Código de ejemplo"
+              textareaClassName="min-h-40 font-mono text-sm"
+              value={draft.exampleCode}
+              onChange={(event) => setDraftField('exampleCode', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Nota de apoyo"
+              textareaClassName="min-h-24"
+              value={draft.supportNote}
+              onChange={(event) => setDraftField('supportNote', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Bloques de apoyo (JSON)"
+              textareaClassName="min-h-64 font-mono text-sm"
+              value={draft.supportBlocksJson}
+              help={{
+                title: 'Bloques de apoyo',
+                body:
+                  'Sirven para construir texto, imagen con texto o galerías siguiendo la misma plantilla del repo. Si no los necesitas, puedes dejar un arreglo vacío.',
+              }}
+              onChange={(event) => setDraftField('supportBlocksJson', event.target.value)}
+              hint="Aquí puedes definir bloques `texto`, `imagenTexto` y `galeria` siguiendo la misma estructura de la plantilla del curso."
+            />
           </div>
         </div>
       </div>
@@ -492,18 +698,41 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
             <p className="eyebrow">Instrucciones</p>
             <h3 className="mt-3 font-display text-xl font-semibold text-foam">Contexto</h3>
           </div>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-foam">Overview</span>
-            <textarea className="field-input min-h-24" value={draft.instructionsOverview} onChange={(event) => setDraftField('instructionsOverview', event.target.value)} />
-          </label>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-foam">Pasos (uno por línea)</span>
-            <textarea className="field-input min-h-28" value={draft.instructionsStepsText} onChange={(event) => setDraftField('instructionsStepsText', event.target.value)} />
-          </label>
-          <label className="block space-y-2">
-            <span className="text-sm font-medium text-foam">Pista</span>
-            <textarea className="field-input min-h-20" value={draft.instructionsHint} onChange={(event) => setDraftField('instructionsHint', event.target.value)} />
-          </label>
+          <TextareaField
+            label="Overview"
+            textareaClassName="min-h-24"
+            value={draft.instructionsOverview}
+            onChange={(event) => setDraftField('instructionsOverview', event.target.value)}
+          />
+          <TextareaField
+            label="Pasos (uno por línea)"
+            textareaClassName="min-h-28"
+            value={draft.instructionsStepsText}
+            help={{
+              title: 'Pasos',
+              body:
+                'Escribe un paso por línea. La interfaz los transforma en una lista ordenada dentro de la lección.',
+            }}
+            onChange={(event) => setDraftField('instructionsStepsText', event.target.value)}
+          />
+          <TextareaField
+            label="Pista"
+            textareaClassName="min-h-20"
+            value={draft.instructionsHint}
+            onChange={(event) => setDraftField('instructionsHint', event.target.value)}
+          />
+          <TextareaField
+            label="Orden de apoyo (JSON opcional)"
+            textareaClassName="min-h-40 font-mono text-sm"
+            value={draft.supportLayoutJson}
+            help={{
+              title: 'Orden de apoyo',
+              body:
+                'Úsalo cuando quieras controlar si primero va un bloque, luego el video, luego la documentación o el ejemplo. Si lo dejas vacío, la lección usa el orden clásico.',
+            }}
+            onChange={(event) => setDraftField('supportLayoutJson', event.target.value)}
+            hint="Si lo dejas vacío, la lección usa el orden legado. Puedes usar `video`, `note`, `documentation`, `example`, `blocks` o un objeto `block` con `blockId` o `blockIndex`."
+          />
         </div>
       </div>
 
@@ -513,47 +742,112 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
             <p className="eyebrow">Reto</p>
             <h3 className="mt-3 font-display text-xl font-semibold text-foam">Challenge</h3>
           </div>
+
           <div className="grid gap-4 lg:grid-cols-2">
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Tipo de ejercicio</span>
-              <input className="field-input" value={draft.exerciseType} onChange={(event) => setDraftField('exerciseType', event.target.value)} />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Título del reto</span>
-              <input className="field-input" value={draft.challengeTitle} onChange={(event) => setDraftField('challengeTitle', event.target.value)} />
-            </label>
-            <label className="block space-y-2 lg:col-span-2">
-              <span className="text-sm font-medium text-foam">Prompt</span>
-              <textarea className="field-input min-h-24" value={draft.prompt} onChange={(event) => setDraftField('prompt', event.target.value)} />
-            </label>
-            <label className="block space-y-2 lg:col-span-2">
-              <span className="text-sm font-medium text-foam">Starter code</span>
-              <textarea className="field-input min-h-40 font-mono text-sm" value={draft.starterCode} onChange={(event) => setDraftField('starterCode', event.target.value)} />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Keywords (coma)</span>
-              <input className="field-input" value={draft.expectedKeywordsText} onChange={(event) => setDraftField('expectedKeywordsText', event.target.value)} />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Resultado esperado</span>
-              <input className="field-input" value={draft.expectedResult} onChange={(event) => setDraftField('expectedResult', event.target.value)} />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Salida guiada</span>
-              <input className="field-input" value={draft.salidaGuiada} onChange={(event) => setDraftField('salidaGuiada', event.target.value)} />
-            </label>
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Criterio de éxito</span>
-              <textarea className="field-input min-h-24" value={draft.successCriteria} onChange={(event) => setDraftField('successCriteria', event.target.value)} />
-            </label>
-            <label className="block space-y-2 lg:col-span-2">
-              <span className="text-sm font-medium text-foam">Nota de ejecución</span>
-              <textarea className="field-input min-h-24" value={draft.executionNote} onChange={(event) => setDraftField('executionNote', event.target.value)} />
-            </label>
-            <label className="block space-y-2 lg:col-span-2">
-              <span className="text-sm font-medium text-foam">Mensaje de éxito</span>
-              <textarea className="field-input min-h-24" value={draft.successMessage} onChange={(event) => setDraftField('successMessage', event.target.value)} />
-            </label>
+            <InputField
+              label="Tipo de ejercicio"
+              value={draft.exerciseType}
+              onChange={(event) => setDraftField('exerciseType', event.target.value)}
+            />
+            <InputField
+              label="Título del reto"
+              value={draft.challengeTitle}
+              onChange={(event) => setDraftField('challengeTitle', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Prompt"
+              textareaClassName="min-h-24"
+              value={draft.prompt}
+              onChange={(event) => setDraftField('prompt', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Starter code"
+              textareaClassName="min-h-40 font-mono text-sm"
+              value={draft.starterCode}
+              help={{
+                title: 'Starter code',
+                body:
+                  'Código inicial que verá la persona antes de resolver el reto. Conviene dejarlo incompleto pero orientado al objetivo.',
+              }}
+              onChange={(event) => setDraftField('starterCode', event.target.value)}
+            />
+            <InputField
+              label="Altura del editor"
+              value={draft.editorHeight}
+              onChange={(event) => setDraftField('editorHeight', event.target.value)}
+            />
+            <InputField
+              label="Keywords (coma)"
+              value={draft.expectedKeywordsText}
+              help={{
+                title: 'Keywords',
+                body:
+                  'Palabras o fragmentos separados por coma que ayudan a validar una solución guiada cuando no se usa Python real.',
+              }}
+              onChange={(event) => setDraftField('expectedKeywordsText', event.target.value)}
+            />
+            <InputField
+              label="Resultado esperado"
+              value={draft.expectedResult}
+              help={{
+                title: 'Resultado esperado',
+                body:
+                  'Salida, texto o resultado que el sistema mostrará como referencia para validar el reto.',
+              }}
+              onChange={(event) => setDraftField('expectedResult', event.target.value)}
+            />
+            <InputField
+              label="Salida guiada"
+              value={draft.salidaGuiada}
+              help={{
+                title: 'Salida guiada',
+                body:
+                  'Respuesta o salida simplificada para retos guiados. Suele ser útil cuando no hay ejecución real.',
+              }}
+              onChange={(event) => setDraftField('salidaGuiada', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Criterio de éxito"
+              textareaClassName="min-h-24"
+              value={draft.successCriteria}
+              onChange={(event) => setDraftField('successCriteria', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Solución completa"
+              textareaClassName="min-h-40 font-mono text-sm"
+              value={draft.solutionCode}
+              onChange={(event) => setDraftField('solutionCode', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Explicación de la solución"
+              textareaClassName="min-h-24"
+              value={draft.solutionNote}
+              onChange={(event) => setDraftField('solutionNote', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Nota de ejecución"
+              textareaClassName="min-h-24"
+              value={draft.executionNote}
+              help={{
+                title: 'Nota de ejecución',
+                body:
+                  'Aclaraciones técnicas para la persona usuaria, por ejemplo límites del editor o cómo interpretar la salida.',
+              }}
+              onChange={(event) => setDraftField('executionNote', event.target.value)}
+            />
+            <TextareaField
+              className="lg:col-span-2"
+              label="Mensaje de éxito"
+              textareaClassName="min-h-24"
+              value={draft.successMessage}
+              onChange={(event) => setDraftField('successMessage', event.target.value)}
+            />
           </div>
         </div>
       </div>
@@ -577,26 +871,95 @@ function FinalAssessmentEditor({ assessment, onSave }) {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <label className="block space-y-2 lg:col-span-2">
-          <span className="text-sm font-medium text-foam">Título</span>
-          <input className="field-input" value={draft.title} onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))} />
-        </label>
-        <label className="block space-y-2 lg:col-span-2">
-          <span className="text-sm font-medium text-foam">Resumen</span>
-          <textarea className="field-input min-h-24" value={draft.summary} onChange={(event) => setDraft((current) => ({ ...current, summary: event.target.value }))} />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Puntaje mínimo</span>
-          <input className="field-input" value={draft.passingScore} onChange={(event) => setDraft((current) => ({ ...current, passingScore: event.target.value }))} />
-        </label>
-        <label className="block space-y-2">
-          <span className="text-sm font-medium text-foam">Preguntas base</span>
-          <input className="field-input" disabled value={assessment.questions.length} />
-        </label>
-        <label className="block space-y-2 lg:col-span-2">
-          <span className="text-sm font-medium text-foam">Mensaje de éxito</span>
-          <textarea className="field-input min-h-24" value={draft.successMessage} onChange={(event) => setDraft((current) => ({ ...current, successMessage: event.target.value }))} />
-        </label>
+        <InputField
+          className="lg:col-span-2"
+          label="Título"
+          value={draft.title}
+          onChange={(event) => setDraft((current) => ({ ...current, title: event.target.value }))}
+        />
+        <TextareaField
+          className="lg:col-span-2"
+          label="Resumen"
+          textareaClassName="min-h-24"
+          value={draft.summary}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, summary: event.target.value }))
+          }
+        />
+        <InputField
+          label="Puntaje mínimo"
+          value={draft.passingScore}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, passingScore: event.target.value }))
+          }
+        />
+        <InputField label="Preguntas base" value={assessment.questions.length} disabled />
+        <TextareaField
+          className="lg:col-span-2"
+          label="Mensaje de éxito"
+          textareaClassName="min-h-24"
+          value={draft.successMessage}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, successMessage: event.target.value }))
+          }
+        />
+        <TextareaField
+          className="lg:col-span-2"
+          label="Preguntas (JSON)"
+          textareaClassName="min-h-56 font-mono text-sm"
+          value={draft.questionsJson}
+          help={{
+            title: 'Evaluación final en JSON',
+            body:
+              'Este campo controla las preguntas finales del curso. Si no necesitas cambiar la estructura, edita solo el texto, las opciones y la respuesta correcta.',
+          }}
+          onChange={(event) =>
+            setDraft((current) => ({ ...current, questionsJson: event.target.value }))
+          }
+          hint="Usa el mismo esquema de preguntas que vive en `src/datos/cursos/*/evaluaciones.js`."
+        />
+      </div>
+    </Tarjeta>
+  )
+}
+
+function CoursePendingState({
+  courseId,
+  meta,
+  draftSource,
+  onImportCodeDraft,
+  onCreateEditableCourse,
+}) {
+  return (
+    <Tarjeta className="space-y-5">
+      <div className="space-y-3">
+        <p className="eyebrow">Curso sin materializar</p>
+        <h2 className="font-display text-2xl font-semibold text-foam">
+          {meta?.title ?? courseId}
+        </h2>
+        <p className="text-mute">
+          Este curso ya convive con el catálogo, pero todavía no existe como estructura editable
+          dentro del CMS local. Puedes traer su borrador por código o crear una base compatible con
+          la plantilla actual del proyecto.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-border/80 bg-white/5 p-4 text-sm text-mute">
+        <p>
+          Catálogo: {meta?.statusLabel ?? 'Sin estado'} / Biblioteca: {meta?.library ?? 'Python'}
+        </p>
+        <p className="mt-2">
+          Fuente por código: {draftSource?.course ? 'borrador disponible' : 'solo metadata de catálogo'}
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        {draftSource?.course ? (
+          <Boton variant="secondary" onClick={onImportCodeDraft}>
+            Importar borrador por código
+          </Boton>
+        ) : null}
+        <Boton onClick={onCreateEditableCourse}>Crear estructura editable</Boton>
       </div>
     </Tarjeta>
   )
@@ -608,6 +971,7 @@ export function PaginaAdminContenido() {
     createCourse,
     createLesson,
     createUnit,
+    deleteCourse,
     deleteLesson,
     deleteUnit,
     replaceContent,
@@ -616,6 +980,7 @@ export function PaginaAdminContenido() {
     updateFinalAssessment,
     updateLesson,
   } = useAccionesApp()
+
   const [selectedCourseId, setSelectedCourseId] = useState(content.catalogoCursos[0]?.id ?? null)
   const [selectedUnitId, setSelectedUnitId] = useState(null)
   const [selectedLessonId, setSelectedLessonId] = useState(null)
@@ -631,22 +996,27 @@ export function PaginaAdminContenido() {
       ),
     [content.catalogoCursos],
   )
+
   const effectiveCourseId =
-    selectedCourseId && findCourse(content, selectedCourseId)
+    selectedCourseId && findCourseMeta(content, selectedCourseId)
       ? selectedCourseId
       : orderedCatalog[0]?.id ?? null
   const selectedCourse = findCourse(content, effectiveCourseId)
   const selectedMeta = findCourseMeta(content, effectiveCourseId)
+  const selectedDraftSource = findDraftCourse(content, effectiveCourseId)
+
   const effectiveUnitId =
     selectedUnitId && findUnit(content, effectiveCourseId, selectedUnitId)
       ? selectedUnitId
       : selectedCourse?.units[0]?.id ?? null
   const selectedUnit = findUnit(content, effectiveCourseId, effectiveUnitId)
+
   const effectiveLessonId =
     selectedLessonId && findLesson(content, effectiveCourseId, effectiveUnitId, selectedLessonId)
       ? selectedLessonId
       : selectedUnit?.lessons[0]?.id ?? null
   const selectedLesson = findLesson(content, effectiveCourseId, effectiveUnitId, effectiveLessonId)
+
   const selectedUnitAssessment =
     content.evaluacionesCursos[effectiveCourseId]?.unitAssessments?.[effectiveUnitId] ?? null
   const selectedFinalAssessment = content.evaluacionesCursos[effectiveCourseId]?.finalAssessment ?? null
@@ -662,6 +1032,37 @@ export function PaginaAdminContenido() {
     setSelectedLessonId(null)
     setNewCourseName('')
     setStatusMessage('Curso creado. Ya puedes editarlo y publicarlo.')
+  }
+
+  function handleMaterializeCourse(sourcePreference = 'catalog') {
+    if (!effectiveCourseId) {
+      return
+    }
+
+    const { content: nextContent, mode } = materializarCursoCmsEnContenido(
+      content,
+      effectiveCourseId,
+      sourcePreference,
+    )
+
+    replaceContent(nextContent, {
+      activityType: 'course_materialized',
+      payload: { courseId: effectiveCourseId, source: mode },
+    })
+    setSelectedUnitId(null)
+    setSelectedLessonId(null)
+
+    if (mode === 'code') {
+      setStatusMessage('Curso importado desde su borrador en código y listo para editarse en el CMS.')
+      return
+    }
+
+    if (mode === 'catalog') {
+      setStatusMessage('Curso inicializado desde el catálogo con una estructura compatible con la plantilla.')
+      return
+    }
+
+    setStatusMessage('El curso ya estaba materializado en el CMS local.')
   }
 
   function handleCreateUnit() {
@@ -687,7 +1088,29 @@ export function PaginaAdminContenido() {
     setStatusMessage('Lección creada y lista para edición.')
   }
 
-  if (!selectedCourse || !selectedMeta) {
+  function handleDeleteCourse() {
+    if (!effectiveCourseId || !selectedCourse) {
+      return
+    }
+
+    const shouldDelete =
+      typeof window === 'undefined' ||
+      window.confirm(
+        `Se eliminará el curso "${selectedCourse.title}" del CMS local. Esta acción quita también sus unidades y evaluaciones. ¿Continuar?`,
+      )
+
+    if (!shouldDelete) {
+      return
+    }
+
+    deleteCourse(effectiveCourseId)
+    setSelectedCourseId(null)
+    setSelectedUnitId(null)
+    setSelectedLessonId(null)
+    setStatusMessage('Curso eliminado del CMS local.')
+  }
+
+  if (!selectedMeta && orderedCatalog.length === 0) {
     return (
       <div className="space-y-8">
         <Tarjeta accent className="space-y-6">
@@ -698,6 +1121,12 @@ export function PaginaAdminContenido() {
             </h1>
           </div>
         </Tarjeta>
+
+        {statusMessage && (
+          <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam">
+            {statusMessage}
+          </div>
+        )}
 
         <Tarjeta className="space-y-4">
           <p className="text-mute">Aún no hay cursos cargados. Crea uno para empezar.</p>
@@ -724,11 +1153,11 @@ export function PaginaAdminContenido() {
             CMS de cursos, unidades y lecciones
           </h1>
           <p className="max-w-3xl text-lg leading-8 text-mute">
-            Aquí queda resuelta la HU-16: puedes crear y publicar contenido, editar videos,
-            documentación, ejemplos, retos e imágenes de apoyo sin tocar los archivos fuente.
+            Aquí queda resuelta la HU23: puedes crear, editar, publicar y borrar contenido
+            usando el mismo formato base que vive en `src/datos/cursos`, para que lo cargado por
+            código y lo gestionado por el CMS sigan siendo compatibles.
           </p>
         </div>
-
       </Tarjeta>
 
       {statusMessage && (
@@ -737,12 +1166,16 @@ export function PaginaAdminContenido() {
         </div>
       )}
 
+      <GuiaRapidaCms />
+
       <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
         <Tarjeta className="space-y-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="eyebrow">Catálogo</p>
-              <h2 className="mt-4 font-display text-2xl font-semibold text-foam">Cursos editables</h2>
+              <h2 className="mt-4 font-display text-2xl font-semibold text-foam">
+                Cursos editables
+              </h2>
             </div>
             <span className="status-chip">{orderedCatalog.length} cursos</span>
           </div>
@@ -758,33 +1191,46 @@ export function PaginaAdminContenido() {
           </div>
 
           <div className="grid gap-3">
-            {orderedCatalog.map((course) => (
-              <button
-                key={course.id}
-                type="button"
-                className={`rounded-2xl border px-4 py-4 text-left transition ${
-                  course.id === effectiveCourseId
-                    ? 'border-primary/35 bg-primary/10'
-                    : 'border-border/80 bg-white/5 hover:border-primary/25'
-                }`}
-                onClick={() => {
-                  setSelectedCourseId(course.id)
-                  setSelectedUnitId(null)
-                  setSelectedLessonId(null)
-                }}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="eyebrow">{course.library}</span>
-                  <span className="status-chip">{course.statusLabel}</span>
-                </div>
-                <p className="mt-3 font-semibold text-foam">{course.title}</p>
-                <p className="mt-2 text-sm text-mute">{course.description}</p>
-              </button>
-            ))}
+            {orderedCatalog.map((course) => {
+              const editableCourse = findCourse(content, course.id)
+              const draftCourse = findDraftCourse(content, course.id)
+
+              return (
+                <button
+                  key={course.id}
+                  type="button"
+                  className={`rounded-2xl border px-4 py-4 text-left transition ${
+                    course.id === effectiveCourseId
+                      ? 'border-primary/35 bg-primary/10'
+                      : 'border-border/80 bg-white/5 hover:border-primary/25'
+                  }`}
+                  onClick={() => {
+                    setSelectedCourseId(course.id)
+                    setSelectedUnitId(null)
+                    setSelectedLessonId(null)
+                  }}
+                >
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="eyebrow">{course.library}</span>
+                    <span className="status-chip">{course.statusLabel}</span>
+                    <span className="status-chip">
+                      {editableCourse
+                        ? 'Editable'
+                        : draftCourse?.course
+                          ? 'Borrador por código'
+                          : 'Solo catálogo'}
+                    </span>
+                  </div>
+                  <p className="mt-3 font-semibold text-foam">{course.title}</p>
+                  <p className="mt-2 text-sm text-mute">{course.description}</p>
+                </button>
+              )
+            })}
           </div>
         </Tarjeta>
 
-        <CourseEditor
+        {selectedCourse && selectedMeta ? (
+          <CourseEditor
           key={effectiveCourseId}
           course={selectedCourse}
           meta={selectedMeta}
@@ -800,15 +1246,29 @@ export function PaginaAdminContenido() {
                 : 'Curso publicado en el catálogo.',
             )
           }}
+          onDeleteCourse={handleDeleteCourse}
         />
+        ) : (
+          <CoursePendingState
+            courseId={effectiveCourseId}
+            meta={selectedMeta}
+            draftSource={selectedDraftSource}
+            onImportCodeDraft={() => handleMaterializeCourse('code')}
+            onCreateEditableCourse={() => handleMaterializeCourse('catalog')}
+          />
+        )}
       </div>
 
+      {selectedCourse ? (
+        <>
       <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
         <Tarjeta className="space-y-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="eyebrow">Unidades</p>
-              <h2 className="mt-4 font-display text-2xl font-semibold text-foam">Mapa del curso</h2>
+              <h2 className="mt-4 font-display text-2xl font-semibold text-foam">
+                Mapa del curso
+              </h2>
             </div>
             <span className="status-chip">{selectedCourse.units.length} unidades</span>
           </div>
@@ -861,6 +1321,7 @@ export function PaginaAdminContenido() {
             }}
             onDelete={() => {
               deleteUnit(effectiveCourseId, effectiveUnitId)
+              setSelectedUnitId(null)
               setSelectedLessonId(null)
               setStatusMessage('Unidad eliminada del curso.')
             }}
@@ -877,7 +1338,9 @@ export function PaginaAdminContenido() {
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="eyebrow">Lecciones</p>
-              <h2 className="mt-4 font-display text-2xl font-semibold text-foam">Editor de misión</h2>
+              <h2 className="mt-4 font-display text-2xl font-semibold text-foam">
+                Editor de misión
+              </h2>
             </div>
             <span className="status-chip">{selectedUnit?.lessons.length ?? 0} lecciones</span>
           </div>
@@ -926,6 +1389,7 @@ export function PaginaAdminContenido() {
             }}
             onDelete={() => {
               deleteLesson(effectiveCourseId, effectiveUnitId, effectiveLessonId)
+              setSelectedLessonId(null)
               setStatusMessage('Lección eliminada de la unidad.')
             }}
             onStatus={setStatusMessage}
@@ -946,6 +1410,16 @@ export function PaginaAdminContenido() {
             setStatusMessage('Evaluación final actualizada.')
           }}
         />
+      )}
+        </>
+      ) : (
+        <Tarjeta className="space-y-4">
+          <p className="eyebrow">Siguiente paso</p>
+          <p className="text-mute">
+            Materializa primero este curso en el CMS y después se habilitan unidades,
+            lecciones y evaluaciones finales en el mismo formato que usa `src/datos/cursos`.
+          </p>
+        </Tarjeta>
       )}
     </div>
   )

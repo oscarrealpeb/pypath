@@ -35,7 +35,9 @@ La app está hecha principalmente con:
 - React Router
 - Tailwind CSS
 - CodeMirror
-- localStorage para guardar datos en el navegador
+- Firebase Auth para acceso real
+- Firestore para perfiles, progreso y CMS
+- localStorage para cache liviano del navegador
 
 ### Versiones importantes
 
@@ -68,6 +70,8 @@ No deberían tener problemas raros porque:
 - el proyecto ya trae su `package.json`
 - el `package-lock.json` ayuda a mantener versiones consistentes
 - no hace falta configurar nada extraño a mano
+
+Si van a probar autenticación o panel administrativo real, revisen primero [docs/firebase-setup-testing.md](docs/firebase-setup-testing.md).
 
 ---
 

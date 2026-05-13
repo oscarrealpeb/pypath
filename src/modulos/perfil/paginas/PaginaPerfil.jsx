@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
+import { MensajeValidacionCampo } from '../../../componentes/MensajeValidacionCampo.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { SelectorIntereses } from '../../../componentes/SelectorIntereses.jsx'
 import { obtenerCatalogoCursos } from '../../contenido/servicios/repositorioContenido.js'
@@ -10,6 +11,17 @@ import {
   opcionesRol,
   sanearSeleccionIntereses,
 } from '../../../datos/opcionesPerfilUsuario.js'
+import {
+  verificarDisponibilidadNombreVisible,
+  verificarDisponibilidadNickname,
+} from '../../autenticacion/servicios/servicioPerfilesFirebase.js'
+import {
+  crearNombreCompleto,
+  normalizarNickname,
+  obtenerMensajeContrasenaMinima,
+  validarNombreVisible,
+  validarNickname,
+} from '../../autenticacion/servicios/servicioValidacionAutenticacion.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 import { obtenerInicioRecomendado } from '../../progreso/selectores/selectoresProgreso.js'
 import {
@@ -22,16 +34,33 @@ import {
 export function PaginaPerfil() {
   const navigate = useNavigate()
   const { user, progress, onboarding } = useEstadoApp()
-  const { updateUserProfile } = useAccionesApp()
+  const { updateUserProfile, updateCurrentUserPassword } = useAccionesApp()
   const catalogoCursos = obtenerCatalogoCursos()
   const [formState, setFormState] = useState({
     name: user?.name ?? '',
+    nickname: user?.nickname ?? '',
     role: user?.role ?? 'programadores',
     experience: user?.experience ?? 'principiante',
     interests: sanearSeleccionIntereses(user?.interests ?? ['bases']),
+    goalCourseId: user?.goalCourseId ?? '',
+  })
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    nextPassword: '',
+    confirmPassword: '',
   })
   const [error, setError] = useState('')
   const [successMessage, setSuccessMessage] = useState('')
+  const [passwordError, setPasswordError] = useState('')
+  const [passwordSuccessMessage, setPasswordSuccessMessage] = useState('')
+  const [nameAvailabilityFeedback, setNameAvailabilityFeedback] = useState({
+    status: 'idle',
+    message: '',
+  })
+  const [nicknameAvailabilityFeedback, setNicknameAvailabilityFeedback] = useState({
+    status: 'idle',
+    message: '',
+  })
 
   const profileLabels = obtenerPerfilLegible(user)
   const overallProgress = obtenerProgresoGeneral(progress)
@@ -46,12 +75,149 @@ export function PaginaPerfil() {
   )
   const goalCourse = catalogoCursos.find((course) => course.id === user?.goalCourseId)
   const routeTargetTitle = goalCourse?.title ?? recommendedStart?.courseTitle ?? 'Fundamentos de Python'
+  const nameFeedback = useMemo(() => {
+    const trimmedName = crearNombreCompleto(formState.name)
+
+    if (!trimmedName) {
+      return {
+        status: 'invalid',
+        message: 'Agrega un nombre para guardar el perfil.',
+      }
+    }
+
+    const nameMessage = validarNombreVisible(trimmedName)
+
+    if (nameMessage) {
+      return {
+        status: 'invalid',
+        message: nameMessage,
+      }
+    }
+
+    if (
+      crearNombreCompleto(trimmedName) === crearNombreCompleto(user?.name ?? '')
+    ) {
+      return {
+        status: 'owned',
+        message: 'Ese nombre visible ya te pertenece.',
+      }
+    }
+
+    return nameAvailabilityFeedback
+  }, [formState.name, nameAvailabilityFeedback, user?.name])
+  const nicknameFeedback = useMemo(() => {
+    const trimmedNickname = formState.nickname.trim()
+
+    if (!trimmedNickname) {
+      return {
+        status: 'invalid',
+        message: 'Elige un nickname para tu cuenta.',
+      }
+    }
+
+    const nicknameMessage = validarNickname(trimmedNickname)
+
+    if (nicknameMessage) {
+      return {
+        status: 'invalid',
+        message: nicknameMessage,
+      }
+    }
+
+    if (
+      normalizarNickname(trimmedNickname) === normalizarNickname(user?.nickname ?? '') &&
+      trimmedNickname === (user?.nickname ?? '').trim()
+    ) {
+      return {
+        status: 'owned',
+        message: 'Ese nickname ya te pertenece.',
+      }
+    }
+
+    return nicknameAvailabilityFeedback
+  }, [formState.nickname, nicknameAvailabilityFeedback, user?.nickname])
+
+  useEffect(() => {
+    const trimmedName = crearNombreCompleto(formState.name)
+    const nameMessage = validarNombreVisible(trimmedName)
+
+    if (!trimmedName || nameMessage || trimmedName === crearNombreCompleto(user?.name ?? '')) {
+      return undefined
+    }
+
+    let isCancelled = false
+
+    const timeoutId = window.setTimeout(async () => {
+      setNameAvailabilityFeedback({
+        status: 'checking',
+        message: 'Validando disponibilidad del nombre visible...',
+      })
+
+      const nextFeedback = await verificarDisponibilidadNombreVisible(trimmedName, user?.id ?? '')
+
+      if (!isCancelled) {
+        setNameAvailabilityFeedback(nextFeedback)
+      }
+    }, 350)
+
+    return () => {
+      isCancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [formState.name, user?.id, user?.name])
+
+  useEffect(() => {
+    const trimmedNickname = formState.nickname.trim()
+
+    const nicknameMessage = validarNickname(trimmedNickname)
+
+    if (!trimmedNickname || nicknameMessage) {
+      return undefined
+    }
+
+    if (
+      normalizarNickname(trimmedNickname) === normalizarNickname(user?.nickname ?? '') &&
+      trimmedNickname === (user?.nickname ?? '').trim()
+    ) {
+      return undefined
+    }
+
+    let isCancelled = false
+
+    const timeoutId = window.setTimeout(async () => {
+      setNicknameAvailabilityFeedback({
+        status: 'checking',
+        message: 'Validando disponibilidad del nickname...',
+      })
+
+      const nextFeedback = await verificarDisponibilidadNickname(trimmedNickname, user?.id ?? '')
+
+      if (!isCancelled) {
+        setNicknameAvailabilityFeedback(nextFeedback)
+      }
+    }, 350)
+
+    return () => {
+      isCancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [formState.nickname, user?.id, user?.nickname])
 
   function handleChange(event) {
     const { name, value } = event.target
     setError('')
     setSuccessMessage('')
     setFormState((current) => ({
+      ...current,
+      [name]: value,
+    }))
+  }
+
+  function handlePasswordChange(event) {
+    const { name, value } = event.target
+    setPasswordError('')
+    setPasswordSuccessMessage('')
+    setPasswordForm((current) => ({
       ...current,
       [name]: value,
     }))
@@ -88,11 +254,39 @@ export function PaginaPerfil() {
     })
   }
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault()
 
-    if (!formState.name.trim()) {
-      setError('Agrega un nombre para guardar el perfil.')
+    const nameMessage = validarNombreVisible(formState.name)
+
+    if (nameMessage) {
+      setError(nameMessage)
+      return
+    }
+
+    const nextNameFeedback = await verificarDisponibilidadNombreVisible(formState.name, user?.id ?? '')
+    setNameAvailabilityFeedback(nextNameFeedback)
+
+    if (nextNameFeedback.status === 'invalid' || nextNameFeedback.status === 'taken') {
+      setError(nextNameFeedback.message)
+      return
+    }
+
+    const nicknameMessage = validarNickname(formState.nickname)
+
+    if (nicknameMessage) {
+      setError(nicknameMessage)
+      return
+    }
+
+    const nextNicknameFeedback = await verificarDisponibilidadNickname(
+      formState.nickname,
+      user?.id ?? '',
+    )
+    setNicknameAvailabilityFeedback(nextNicknameFeedback)
+
+    if (nextNicknameFeedback.status === 'invalid' || nextNicknameFeedback.status === 'taken') {
+      setError(nextNicknameFeedback.message)
       return
     }
 
@@ -101,13 +295,60 @@ export function PaginaPerfil() {
       return
     }
 
-    updateUserProfile({
-      name: formState.name.trim(),
-      role: formState.role,
-      experience: formState.experience,
-      interests: formState.interests,
-    })
-    setSuccessMessage('Perfil actualizado en estado local. Las nuevas recomendaciones ya quedan aplicadas.')
+    try {
+      await updateUserProfile({
+        name: crearNombreCompleto(formState.name),
+        nickname: formState.nickname.trim(),
+        nicknameNormalized: normalizarNickname(formState.nickname),
+        role: formState.role,
+        experience: formState.experience,
+        interests: formState.interests,
+        goalCourseId: formState.goalCourseId || null,
+      })
+      setSuccessMessage(
+        'Perfil actualizado. Las nuevas recomendaciones ya quedaron aplicadas.',
+      )
+    } catch (updateError) {
+      setError(updateError.message || 'No pudimos actualizar el perfil.')
+    }
+  }
+
+  async function handlePasswordSubmit(event) {
+    event.preventDefault()
+    setPasswordError('')
+    setPasswordSuccessMessage('')
+
+    if (!passwordForm.currentPassword.trim()) {
+      setPasswordError('Escribe tu contraseña actual o temporal.')
+      return
+    }
+
+    const passwordMessage = obtenerMensajeContrasenaMinima(passwordForm.nextPassword)
+
+    if (passwordMessage) {
+      setPasswordError(passwordMessage)
+      return
+    }
+
+    if (passwordForm.nextPassword !== passwordForm.confirmPassword) {
+      setPasswordError('La confirmación no coincide con la nueva contraseña.')
+      return
+    }
+
+    try {
+      await updateCurrentUserPassword({
+        currentPassword: passwordForm.currentPassword,
+        nextPassword: passwordForm.nextPassword,
+      })
+      setPasswordForm({
+        currentPassword: '',
+        nextPassword: '',
+        confirmPassword: '',
+      })
+      setPasswordSuccessMessage('Contraseña actualizada.')
+    } catch (updateError) {
+      setPasswordError(updateError.message || 'No pudimos actualizar la contraseña.')
+    }
   }
 
   return (
@@ -126,6 +367,9 @@ export function PaginaPerfil() {
               <p className="text-mute">
                 {profileLabels.roleLabel} / Nivel {profileLabels.experienceLabel}
               </p>
+              {user?.nickname ? (
+                <p className="text-sm text-mute">Nickname: @{user.nickname}</p>
+              ) : null}
             </div>
           </div>
 
@@ -143,6 +387,13 @@ export function PaginaPerfil() {
           <div className="rounded-2xl border border-border/80 bg-white/5 p-5">
             <p className="text-xs uppercase tracking-[0.24em] text-mute">Correo</p>
             <p className="mt-3 text-sm font-semibold text-foam">{user?.email}</p>
+            <p className="mt-2 text-xs leading-6 text-mute">
+              {user?.provider === 'google'
+                ? 'Acceso con Google'
+                : user?.emailVerified
+                  ? 'Correo verificado'
+                  : 'Correo pendiente por verificar'}
+            </p>
           </div>
           <div className="rounded-2xl border border-border/80 bg-white/5 p-5">
             <p className="text-xs uppercase tracking-[0.24em] text-mute">Curso sugerido</p>
@@ -179,10 +430,10 @@ export function PaginaPerfil() {
           <div>
             <p className="eyebrow">Editar perfil</p>
             <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
-              Ajusta rol, nivel e intereses
+              Ajusta nombre, nickname, rol e intereses
             </h2>
             <p className="mt-3 text-mute">
-              Este formulario deja lista la app para conectarse después a Firebase real sin cambiar el flujo de UI.
+              Este formulario guarda tus cambios y mantiene la misma experiencia del resto de la plataforma.
             </p>
           </div>
 
@@ -196,6 +447,19 @@ export function PaginaPerfil() {
                 value={formState.name}
                 onChange={handleChange}
               />
+              <MensajeValidacionCampo feedback={nameFeedback} />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-foam">Nickname</span>
+              <input
+                className="field-input"
+                type="text"
+                name="nickname"
+                value={formState.nickname}
+                onChange={handleChange}
+              />
+              <MensajeValidacionCampo feedback={nicknameFeedback} />
             </label>
 
             <label className="block space-y-2">
@@ -230,6 +494,23 @@ export function PaginaPerfil() {
               </select>
             </label>
 
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-foam">Ruta objetivo</span>
+              <select
+                className="field-input"
+                name="goalCourseId"
+                value={formState.goalCourseId}
+                onChange={handleChange}
+              >
+                <option value="">Seguir recomendación automática</option>
+                {catalogoCursos.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.title}
+                  </option>
+                ))}
+              </select>
+            </label>
+
             <div className="space-y-2">
               <span className="text-sm font-medium text-foam">Intereses</span>
               <SelectorIntereses
@@ -239,17 +520,17 @@ export function PaginaPerfil() {
               />
             </div>
 
-            {error && (
+            {error ? (
               <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100">
                 {error}
               </div>
-            )}
+            ) : null}
 
-            {successMessage && (
+            {successMessage ? (
               <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam">
                 {successMessage}
               </div>
-            )}
+            ) : null}
 
             <Boton type="submit">Guardar cambios</Boton>
           </form>
@@ -259,7 +540,7 @@ export function PaginaPerfil() {
           <div>
             <p className="eyebrow">Lectura actual</p>
             <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
-              Recomendación y curso activo
+              Recomendacion y curso activo
             </h2>
           </div>
 
@@ -284,15 +565,15 @@ export function PaginaPerfil() {
             </p>
           </div>
 
-          {recommendedStart && (
+          {recommendedStart ? (
             <div className="rounded-2xl border border-primary/20 bg-primary/10 p-5">
-              <p className="text-xs uppercase tracking-[0.24em] text-mute">Diagnóstico guardado</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-mute">Diagnostico guardado</p>
               <p className="mt-3 font-semibold text-foam">{recommendedStart.courseTitle}</p>
               <p className="mt-2 text-sm text-mute">
                 Unidad sugerida: {recommendedStart.unitTitle} / Punto de inicio: {recommendedStart.lessonTitle}
               </p>
             </div>
-          )}
+          ) : null}
 
           <div className="rounded-2xl border border-border/80 bg-white/5 p-5">
             <p className="text-xs uppercase tracking-[0.24em] text-mute">Bibliotecas activas</p>
@@ -310,6 +591,71 @@ export function PaginaPerfil() {
         </Tarjeta>
       </div>
 
+      {user?.provider === 'email' ? (
+        <Tarjeta className="space-y-6">
+          <div>
+            <p className="eyebrow">Acceso local</p>
+            <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
+              Cambiar contraseña
+            </h2>
+            <p className="mt-3 text-mute">
+              Este cambio requiere tu contraseña actual para proteger la cuenta.
+            </p>
+          </div>
+
+          <form className="grid gap-4 lg:grid-cols-3" onSubmit={handlePasswordSubmit}>
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-foam">Contraseña actual o temporal</span>
+              <input
+                className="field-input"
+                type="password"
+                name="currentPassword"
+                value={passwordForm.currentPassword}
+                onChange={handlePasswordChange}
+              />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-foam">Nueva contraseña</span>
+              <input
+                className="field-input"
+                type="password"
+                name="nextPassword"
+                value={passwordForm.nextPassword}
+                onChange={handlePasswordChange}
+              />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-foam">Confirmar nueva contraseña</span>
+              <input
+                className="field-input"
+                type="password"
+                name="confirmPassword"
+                value={passwordForm.confirmPassword}
+                onChange={handlePasswordChange}
+              />
+            </label>
+
+            {passwordError ? (
+              <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100 lg:col-span-3">
+                {passwordError}
+              </div>
+            ) : null}
+
+            {passwordSuccessMessage ? (
+              <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam lg:col-span-3">
+                {passwordSuccessMessage}
+              </div>
+            ) : null}
+
+            <div className="lg:col-span-3">
+              <Boton type="submit">Actualizar contraseña</Boton>
+            </div>
+          </form>
+        </Tarjeta>
+      ) : null}
+
       <section className="space-y-4">
         <div>
           <p className="eyebrow">Progreso por curso</p>
@@ -323,7 +669,7 @@ export function PaginaPerfil() {
             <Tarjeta key={course.id} className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="eyebrow">{course.library}</span>
-                {meta && <span className="status-chip">{meta.statusLabel}</span>}
+                {meta ? <span className="status-chip">{meta.statusLabel}</span> : null}
               </div>
 
               <div>

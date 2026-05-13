@@ -1,6 +1,6 @@
 import { catalogoCursos as defaultCourseCatalog } from '../../../datos/catalogoCursos.js'
 import { evaluacionesCursos as defaultCourseAssessments } from '../../../datos/evaluacionesCursos.js'
-import { cursos as defaultCourses } from '../../../datos/cursos.js'
+import { cursos as defaultCourses, cursosBorrador as defaultDraftCourses } from '../../../datos/cursos.js'
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
@@ -11,6 +11,7 @@ export function crearContenidoInicial() {
     cursos: clone(defaultCourses),
     catalogoCursos: clone(defaultCourseCatalog),
     evaluacionesCursos: clone(defaultCourseAssessments),
+    cursosBorrador: clone(defaultDraftCourses ?? {}),
   }
 }
 

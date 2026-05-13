@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
@@ -67,6 +68,47 @@ export function PaginaCurso() {
     (course.requiredCourseIds?.length ?? 0) > 0 &&
     courseProgress.completedCount === 0 &&
     !courseSummary.prerequisitesResolved
+
+  const unitsCarouselRef = useRef(null)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
+  const [canScrollRight, setCanScrollRight] = useState(false)
+  const [currentUnitIndex, setCurrentUnitIndex] = useState(0)
+
+  useEffect(() => {
+    const container = unitsCarouselRef.current
+    if (!container) {
+      return undefined
+    }
+
+    const updateScrollState = () => {
+      setCanScrollLeft(container.scrollLeft > 8)
+      setCanScrollRight(container.scrollLeft + container.clientWidth < container.scrollWidth - 8)
+    }
+
+    updateScrollState()
+    container.addEventListener('scroll', updateScrollState)
+    window.addEventListener('resize', updateScrollState)
+
+    return () => {
+      container.removeEventListener('scroll', updateScrollState)
+      window.removeEventListener('resize', updateScrollState)
+    }
+  }, [course.units.length])
+
+  function scrollUnits(direction) {
+    const container = unitsCarouselRef.current
+    if (!container) {
+      return
+    }
+
+    const nextIndex = Math.max(0, Math.min(course.units.length - 1, currentUnitIndex + direction))
+    setCurrentUnitIndex(nextIndex)
+
+    const cards = container.querySelectorAll(':scope > div')
+    if (cards[nextIndex]) {
+      cards[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -180,17 +222,50 @@ export function PaginaCurso() {
           </h2>
         </div>
 
-        <div className="grid gap-6">
-          {course.units.map((unit) => (
-            <TarjetaUnidad
-              key={unit.id}
-              courseId={course.id}
-              unit={unit}
-              progress={progress}
-              assessmentResult={onboarding.assessmentResult}
-              recommendedUnitId={onboarding.assessmentResult?.recommendedUnitId}
-            />
-          ))}
+        <div className="space-y-4 rounded-3xl border border-border/80 bg-white/5 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm text-mute">Desplaza las unidades horizontalmente usando las flechas.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Boton
+                variant="secondary"
+                size="sm"
+                disabled={currentUnitIndex === 0}
+                onClick={() => scrollUnits(-1)}
+                className="px-2"
+              >
+                ←
+              </Boton>
+              <Boton
+                variant="secondary"
+                size="sm"
+                disabled={currentUnitIndex >= course.units.length - 1}
+                onClick={() => scrollUnits(1)}
+                className="px-2"
+              >
+                →
+              </Boton>
+            </div>
+          </div>
+
+          <div
+            ref={unitsCarouselRef}
+            className="flex gap-6 overflow-x-auto scroll-smooth pb-4 pr-2"
+            style={{ scrollSnapType: 'x mandatory' }}
+          >
+            {course.units.map((unit) => (
+              <div key={unit.id} className="min-w-full flex-shrink-0 snap-start">
+                <TarjetaUnidad
+                  courseId={course.id}
+                  unit={unit}
+                  progress={progress}
+                  assessmentResult={onboarding.assessmentResult}
+                  recommendedUnitId={onboarding.assessmentResult?.recommendedUnitId}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

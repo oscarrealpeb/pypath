@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { BarraProgreso } from '../../../componentes/BarraProgreso.jsx'
-import { DURACION_DIAGNOSTICO_MINUTOS } from '../../../datos/preguntasDiagnostico.js'
+import {
+  CANTIDAD_PREGUNTAS_DIAGNOSTICO,
+  DURACION_DIAGNOSTICO_MINUTOS,
+} from '../../../datos/preguntasDiagnostico.js'
 import { evaluarDiagnostico } from '../servicios/servicioDiagnostico.js'
 
 const etiquetasTipo = {
@@ -105,10 +108,10 @@ export function CuestionarioDiagnostico({
           </h2>
           <p className="max-w-3xl text-mute">
             Aquí solo verás lógica base de Python: variables, condicionales, ciclos,
-            funciones y colecciones. Son 10 preguntas y este intento no se repite.
+            funciones y colecciones. Son {CANTIDAD_PREGUNTAS_DIAGNOSTICO} preguntas y este intento no se repite.
           </p>
           <div className="flex flex-wrap gap-2 text-sm text-mute">
-            <span className="status-chip">10 preguntas</span>
+            <span className="status-chip">{preguntas.length} preguntas</span>
             <span className="status-chip">Un solo intento</span>
             <span className="status-chip">{DURACION_DIAGNOSTICO_MINUTOS} minutos</span>
           </div>

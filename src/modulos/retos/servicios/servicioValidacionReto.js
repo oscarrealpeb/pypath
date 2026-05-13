@@ -2,9 +2,20 @@ function normalizeOutput(text) {
   return String(text ?? '')
     .replace(/\r\n/g, '\n')
     .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
+    .filter((line) => line.trim() !== '')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
     .join('\n')
+    .trim()
+}
+
+function normalizeForComparison(text) {
+  return String(text ?? '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .filter((line) => line.trim() !== '')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .join('\n')
+    .toLowerCase()
     .trim()
 }
 
@@ -52,13 +63,51 @@ export function validarReto(code, lesson, executionResult = null) {
     const expectedOutput = normalizeOutput(lesson.challenge.expectedResult)
     const actualOutput = normalizeOutput(executionResult.output)
 
-    if (expectedOutput && actualOutput !== expectedOutput) {
+    if (expectedOutput.includes('x.x.x')) {
+      const prefix = expectedOutput.split('x.x.x')[0].trim()
+      const versionPattern = new RegExp(
+        `^${prefix.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\d+\\.\\d+\\.\\d+$`,
+        'i',
+      )
+      const versionMatch = actualOutput
+        .split('\n')
+        .some((line) => versionPattern.test(line))
+
+      if (!versionMatch) {
+        return {
+          status: 'error',
+          message: 'Tu solución ya corre, pero la salida todavía no coincide con el formato de versión esperado.',
+          missingKeywords: [],
+          expectedOutput: lesson.challenge.expectedResult,
+          actualOutput: executionResult.output,
+        }
+      }
+
       return {
-        status: 'error',
-        message: 'Tu solución ya corre, pero la salida todavía no coincide con el resultado esperado.',
+        status: 'success',
+        message: lesson.challenge.successMessage,
         missingKeywords: [],
-        expectedOutput: lesson.challenge.expectedResult,
-        actualOutput: executionResult.output,
+      }
+    }
+
+    if (expectedOutput && actualOutput !== expectedOutput) {
+      const expectedNormalized = normalizeForComparison(lesson.challenge.expectedResult)
+      const actualNormalized = normalizeForComparison(executionResult.output)
+
+      if (expectedNormalized !== actualNormalized) {
+        return {
+          status: 'error',
+          message: 'Tu solución ya corre, pero la salida todavía no coincide con el resultado esperado.',
+          missingKeywords: [],
+          expectedOutput: lesson.challenge.expectedResult,
+          actualOutput: executionResult.output,
+        }
+      }
+
+      return {
+        status: 'success',
+        message: lesson.challenge.successMessage,
+        missingKeywords: [],
       }
     }
   }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react'
+﻿import { useCallback, useEffect, useReducer, useRef } from 'react'
 import {
   actualizarCursoEnContenido,
   actualizarEvaluacionFinalEnContenido,
@@ -17,6 +17,7 @@ import {
   actualizarContrasenaUsuarioActual,
   actualizarNombreVisibleUsuarioActual,
   cerrarSesionFirebase,
+  consumirSemillaRedireccionGoogle,
   enviarCorreoRecuperacion,
   iniciarSesionConCorreoONickname,
   iniciarSesionConGoogle,
@@ -29,7 +30,6 @@ import {
 import {
   asegurarPerfilUsuario,
   buscarPerfilPorNombreVisible,
-  buscarPerfilPorNickname,
   construirUsuarioAplicacion,
   guardarEstadoAprendizajeUsuario,
   guardarPerfilUsuario,
@@ -38,7 +38,6 @@ import {
 } from '../../autenticacion/servicios/servicioPerfilesFirebase.js'
 import {
   crearNombreCompleto,
-  normalizarNickname,
   obtenerMensajeContrasenaMinima,
 } from '../../autenticacion/servicios/servicioValidacionAutenticacion.js'
 import {
@@ -456,7 +455,8 @@ export function ProveedorEstadoApp({ children }) {
       return null
     }
 
-    const profile = await asegurarPerfilUsuario(firebaseUser, profileSeed ?? {})
+    const redirectSeed = profileSeed ?? consumirSemillaRedireccionGoogle()
+    const profile = await asegurarPerfilUsuario(firebaseUser, redirectSeed ?? {})
 
     if (!profile) {
       dispatch({
@@ -667,6 +667,13 @@ export function ProveedorEstadoApp({ children }) {
         session = await iniciarSesionConCorreoONickname(formData)
       }
 
+      if (session?.redirectStarted) {
+        return {
+          redirectStarted: true,
+          requiresEmailVerification: false,
+        }
+      }
+
       const sessionUser = await sincronizarSesionResuelta(
         session.firebaseUser,
         session.profile,
@@ -713,31 +720,17 @@ export function ProveedorEstadoApp({ children }) {
       }
 
       const nextName = crearNombreCompleto(profileData.name) || stateRef.current.user.name
-      const trimmedNickname =
-        profileData.nickname != null
-          ? profileData.nickname.trim()
-          : (stateRef.current.user.nickname ?? '').trim()
 
       if (profileData.name != null && nextName) {
         const nameOwner = await buscarPerfilPorNombreVisible(nextName)
 
         if (nameOwner && nameOwner.id !== stateRef.current.user.id) {
-          throw new Error('Ese nombre visible ya está en uso. Elige otro distinto.')
-        }
-      }
-
-      if (profileData.nickname != null && trimmedNickname) {
-        const nicknameOwner = await buscarPerfilPorNickname(trimmedNickname)
-
-        if (nicknameOwner && nicknameOwner.id !== stateRef.current.user.id) {
-          throw new Error('Ese nickname ya esta en uso. Elige otro distinto.')
+          throw new Error('Ese nombre de usuario ya está en uso. Elige otro distinto.')
         }
       }
 
       const nextProfilePatch = {
         name: nextName,
-        nickname: trimmedNickname,
-        nicknameNormalized: trimmedNickname ? normalizarNickname(trimmedNickname) : '',
         role: profileData.role ?? stateRef.current.user.role ?? 'programadores',
         experience: profileData.experience ?? stateRef.current.user.experience ?? 'principiante',
         interests: profileData.interests ?? stateRef.current.user.interests ?? ['bases'],
@@ -1072,3 +1065,4 @@ export function ProveedorEstadoApp({ children }) {
     </ContextoEstadoApp.Provider>
   )
 }
+

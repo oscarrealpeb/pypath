@@ -58,6 +58,7 @@ function UnidadesPaginadas({ courseId, units, progress, assessmentResult, recomm
         key={units[paginaActual].id}
         courseId={courseId}
         unit={units[paginaActual]}
+        unitIndex={paginaActual}
         progress={progress}
         assessmentResult={assessmentResult}
         recommendedUnitId={recommendedUnitId}

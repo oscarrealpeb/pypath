@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+﻿import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { MensajeValidacionCampo } from '../../../componentes/MensajeValidacionCampo.jsx'
@@ -13,14 +13,11 @@ import {
 } from '../../../datos/opcionesPerfilUsuario.js'
 import {
   verificarDisponibilidadNombreVisible,
-  verificarDisponibilidadNickname,
 } from '../../autenticacion/servicios/servicioPerfilesFirebase.js'
 import {
   crearNombreCompleto,
-  normalizarNickname,
   obtenerMensajeContrasenaMinima,
   validarNombreVisible,
-  validarNickname,
 } from '../../autenticacion/servicios/servicioValidacionAutenticacion.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 import { obtenerInicioRecomendado } from '../../progreso/selectores/selectoresProgreso.js'
@@ -38,7 +35,6 @@ export function PaginaPerfil() {
   const catalogoCursos = obtenerCatalogoCursos()
   const [formState, setFormState] = useState({
     name: user?.name ?? '',
-    nickname: user?.nickname ?? '',
     role: user?.role ?? 'programadores',
     experience: user?.experience ?? 'principiante',
     interests: sanearSeleccionIntereses(user?.interests ?? ['bases']),
@@ -54,10 +50,6 @@ export function PaginaPerfil() {
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccessMessage, setPasswordSuccessMessage] = useState('')
   const [nameAvailabilityFeedback, setNameAvailabilityFeedback] = useState({
-    status: 'idle',
-    message: '',
-  })
-  const [nicknameAvailabilityFeedback, setNicknameAvailabilityFeedback] = useState({
     status: 'idle',
     message: '',
   })
@@ -99,43 +91,12 @@ export function PaginaPerfil() {
     ) {
       return {
         status: 'owned',
-        message: 'Ese nombre visible ya te pertenece.',
+        message: 'Ese nombre de usuario ya te pertenece.',
       }
     }
 
     return nameAvailabilityFeedback
   }, [formState.name, nameAvailabilityFeedback, user?.name])
-  const nicknameFeedback = useMemo(() => {
-    const trimmedNickname = formState.nickname.trim()
-
-    if (!trimmedNickname) {
-      return {
-        status: 'invalid',
-        message: 'Elige un nickname para tu cuenta.',
-      }
-    }
-
-    const nicknameMessage = validarNickname(trimmedNickname)
-
-    if (nicknameMessage) {
-      return {
-        status: 'invalid',
-        message: nicknameMessage,
-      }
-    }
-
-    if (
-      normalizarNickname(trimmedNickname) === normalizarNickname(user?.nickname ?? '') &&
-      trimmedNickname === (user?.nickname ?? '').trim()
-    ) {
-      return {
-        status: 'owned',
-        message: 'Ese nickname ya te pertenece.',
-      }
-    }
-
-    return nicknameAvailabilityFeedback
-  }, [formState.nickname, nicknameAvailabilityFeedback, user?.nickname])
 
   useEffect(() => {
     const trimmedName = crearNombreCompleto(formState.name)
@@ -150,7 +111,7 @@ export function PaginaPerfil() {
     const timeoutId = window.setTimeout(async () => {
       setNameAvailabilityFeedback({
         status: 'checking',
-        message: 'Validando disponibilidad del nombre visible...',
+        message: 'Validando disponibilidad del nombre de usuario...',
       })
 
       const nextFeedback = await verificarDisponibilidadNombreVisible(trimmedName, user?.id ?? '')
@@ -165,43 +126,6 @@ export function PaginaPerfil() {
       window.clearTimeout(timeoutId)
     }
   }, [formState.name, user?.id, user?.name])
-
-  useEffect(() => {
-    const trimmedNickname = formState.nickname.trim()
-
-    const nicknameMessage = validarNickname(trimmedNickname)
-
-    if (!trimmedNickname || nicknameMessage) {
-      return undefined
-    }
-
-    if (
-      normalizarNickname(trimmedNickname) === normalizarNickname(user?.nickname ?? '') &&
-      trimmedNickname === (user?.nickname ?? '').trim()
-    ) {
-      return undefined
-    }
-
-    let isCancelled = false
-
-    const timeoutId = window.setTimeout(async () => {
-      setNicknameAvailabilityFeedback({
-        status: 'checking',
-        message: 'Validando disponibilidad del nickname...',
-      })
-
-      const nextFeedback = await verificarDisponibilidadNickname(trimmedNickname, user?.id ?? '')
-
-      if (!isCancelled) {
-        setNicknameAvailabilityFeedback(nextFeedback)
-      }
-    }, 350)
-
-    return () => {
-      isCancelled = true
-      window.clearTimeout(timeoutId)
-    }
-  }, [formState.nickname, user?.id, user?.nickname])
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -272,24 +196,6 @@ export function PaginaPerfil() {
       return
     }
 
-    const nicknameMessage = validarNickname(formState.nickname)
-
-    if (nicknameMessage) {
-      setError(nicknameMessage)
-      return
-    }
-
-    const nextNicknameFeedback = await verificarDisponibilidadNickname(
-      formState.nickname,
-      user?.id ?? '',
-    )
-    setNicknameAvailabilityFeedback(nextNicknameFeedback)
-
-    if (nextNicknameFeedback.status === 'invalid' || nextNicknameFeedback.status === 'taken') {
-      setError(nextNicknameFeedback.message)
-      return
-    }
-
     if (formState.interests.length === 0 || formState.interests.length > 4) {
       setError('Elige entre 1 y 4 intereses.')
       return
@@ -298,8 +204,6 @@ export function PaginaPerfil() {
     try {
       await updateUserProfile({
         name: crearNombreCompleto(formState.name),
-        nickname: formState.nickname.trim(),
-        nicknameNormalized: normalizarNickname(formState.nickname),
         role: formState.role,
         experience: formState.experience,
         interests: formState.interests,
@@ -367,9 +271,6 @@ export function PaginaPerfil() {
               <p className="text-mute">
                 {profileLabels.roleLabel} / Nivel {profileLabels.experienceLabel}
               </p>
-              {user?.nickname ? (
-                <p className="text-sm text-mute">Nickname: @{user.nickname}</p>
-              ) : null}
             </div>
           </div>
 
@@ -430,7 +331,7 @@ export function PaginaPerfil() {
           <div>
             <p className="eyebrow">Editar perfil</p>
             <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
-              Ajusta nombre, nickname, rol e intereses
+              Ajusta nombre de usuario, rol e intereses
             </h2>
             <p className="mt-3 text-mute">
               Este formulario guarda tus cambios y mantiene la misma experiencia del resto de la plataforma.
@@ -439,7 +340,7 @@ export function PaginaPerfil() {
 
           <form className="space-y-4" onSubmit={handleSubmit}>
             <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Nombre</span>
+              <span className="text-sm font-medium text-foam">Nombre de usuario</span>
               <input
                 className="field-input"
                 type="text"
@@ -448,18 +349,6 @@ export function PaginaPerfil() {
                 onChange={handleChange}
               />
               <MensajeValidacionCampo feedback={nameFeedback} />
-            </label>
-
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Nickname</span>
-              <input
-                className="field-input"
-                type="text"
-                name="nickname"
-                value={formState.nickname}
-                onChange={handleChange}
-              />
-              <MensajeValidacionCampo feedback={nicknameFeedback} />
             </label>
 
             <label className="block space-y-2">
@@ -540,7 +429,7 @@ export function PaginaPerfil() {
           <div>
             <p className="eyebrow">Lectura actual</p>
             <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
-              Recomendacion y curso activo
+              Recomendación y curso activo
             </h2>
           </div>
 
@@ -567,7 +456,7 @@ export function PaginaPerfil() {
 
           {recommendedStart ? (
             <div className="rounded-2xl border border-primary/20 bg-primary/10 p-5">
-              <p className="text-xs uppercase tracking-[0.24em] text-mute">Diagnostico guardado</p>
+              <p className="text-xs uppercase tracking-[0.24em] text-mute">Diagnóstico guardado</p>
               <p className="mt-3 font-semibold text-foam">{recommendedStart.courseTitle}</p>
               <p className="mt-2 text-sm text-mute">
                 Unidad sugerida: {recommendedStart.unitTitle} / Punto de inicio: {recommendedStart.lessonTitle}
@@ -706,3 +595,5 @@ export function PaginaPerfil() {
     </div>
   )
 }
+
+

@@ -2,6 +2,10 @@ import { useNavigate } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { BarraProgreso } from '../../../componentes/BarraProgreso.jsx'
+import {
+  obtenerEtiquetaVisibleLeccion,
+  obtenerTituloVisibleLeccion,
+} from '../selectores/selectoresCursos.js'
 import { obtenerRegistroEvaluacionUnidad } from '../../evaluaciones/selectores/selectoresEvaluaciones.js'
 import {
   leccionEstaCompletada,
@@ -11,7 +15,14 @@ import {
   unidadEstaDesbloqueada,
 } from '../../progreso/selectores/selectoresProgreso.js'
 
-export function TarjetaUnidad({ courseId, unit, progress, assessmentResult, recommendedUnitId }) {
+export function TarjetaUnidad({
+  courseId,
+  unit,
+  unitIndex,
+  progress,
+  assessmentResult,
+  recommendedUnitId,
+}) {
   const navigate = useNavigate()
   const { completedLessons, completedUnitAssessments, completedCourseAssessments } = progress
   const completedCount = unit.lessons.filter((lesson) => completedLessons.includes(lesson.id)).length
@@ -70,7 +81,7 @@ export function TarjetaUnidad({ courseId, unit, progress, assessmentResult, reco
       <BarraProgreso value={completedCount} total={unit.lessons.length} label="Progreso de la unidad" />
 
       <div className="grid gap-3">
-        {unit.lessons.map((lesson) => {
+        {unit.lessons.map((lesson, lessonIndex) => {
           const completed = leccionEstaCompletada(completedLessons, lesson.id)
           const unlocked = leccionEstaDesbloqueada(
             completedLessons,
@@ -79,6 +90,8 @@ export function TarjetaUnidad({ courseId, unit, progress, assessmentResult, reco
             lesson.id,
             assessmentResult,
           )
+          const missionLabel = obtenerEtiquetaVisibleLeccion(unitIndex, lessonIndex)
+          const visibleTitle = obtenerTituloVisibleLeccion(lesson, lessonIndex)
 
           return (
             <div
@@ -93,8 +106,9 @@ export function TarjetaUnidad({ courseId, unit, progress, assessmentResult, reco
             >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
+                  <p className="eyebrow">{missionLabel}</p>
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-semibold text-foam">{lesson.title}</span>
+                    <span className="text-sm font-semibold text-foam">{visibleTitle}</span>
                     <span className="status-chip">{lesson.duration}</span>
                     <span className="status-chip">{lesson.xp} XP</span>
                   </div>
@@ -183,4 +197,3 @@ export function TarjetaUnidad({ courseId, unit, progress, assessmentResult, reco
     </Tarjeta>
   )
 }
-

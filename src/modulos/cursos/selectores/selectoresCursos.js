@@ -3,8 +3,25 @@ import {
   obtenerCursos,
 } from '../../contenido/servicios/repositorioContenido.js'
 
+const PREFIJO_MISION_REGEX = /^Misi[oó]n\s+\d+\s*:\s*/i
+
 export function obtenerCursoPorId(courseId) {
   return obtenerCursos().find((course) => course.id === courseId) ?? null
+}
+
+export function obtenerEtiquetaVisibleLeccion(unitIndex, lessonIndexInUnit) {
+  return `Unidad ${unitIndex + 1} · Misión ${lessonIndexInUnit + 1}`
+}
+
+export function obtenerTituloVisibleLeccion(lesson, lessonIndexInUnit) {
+  const rawTitle = lesson?.title?.trim() ?? ''
+  const cleanTitle = rawTitle.replace(PREFIJO_MISION_REGEX, '').trim()
+
+  if (cleanTitle) {
+    return cleanTitle
+  }
+
+  return rawTitle || `Misión ${lessonIndexInUnit + 1}`
 }
 
 export function obtenerRegistroUnidad(courseId, unitId) {

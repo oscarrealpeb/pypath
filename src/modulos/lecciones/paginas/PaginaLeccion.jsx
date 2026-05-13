@@ -1,11 +1,15 @@
-import { useNavigate, useParams } from 'react-router-dom'
+﻿import { useNavigate, useParams } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { BarraProgreso } from '../../../componentes/BarraProgreso.jsx'
 import { combinarClases } from '../../../utilidades/combinarClases.js'
 import { obtenerRutaEvaluacionDesdePaso } from '../../evaluaciones/selectores/selectoresEvaluaciones.js'
 import { EspacioReto } from '../../retos/componentes/EspacioReto.jsx'
-import { obtenerRegistroLeccion } from '../../cursos/selectores/selectoresCursos.js'
+import {
+  obtenerEtiquetaVisibleLeccion,
+  obtenerRegistroLeccion,
+  obtenerTituloVisibleLeccion,
+} from '../../cursos/selectores/selectoresCursos.js'
 import { useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 import {
   obtenerSiguientePasoCurso,
@@ -464,16 +468,21 @@ export function PaginaLeccion() {
   const hasSupportVideo = supportItems.some((item) => item.type === 'video')
   const hasSupportDocumentation = supportItems.some((item) => item.type === 'documentation')
   const hasSupportExample = supportItems.some((item) => item.type === 'example')
+  const missionLabel = obtenerEtiquetaVisibleLeccion(record.unitIndex, record.lessonIndexInUnit)
+  const visibleLessonTitle = obtenerTituloVisibleLeccion(
+    record.lesson,
+    record.lessonIndexInUnit,
+  )
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="eyebrow">
-            {record.course.title} / {record.unit.title}
+            {record.course.title} / {record.unit.title} / {missionLabel}
           </p>
           <h1 className="mt-4 font-display text-4xl font-semibold text-foam">
-            {record.lesson.title}
+            {visibleLessonTitle}
           </h1>
           <p className="mt-3 max-w-3xl text-lg leading-8 text-mute">{record.lesson.objective}</p>
         </div>
@@ -493,7 +502,7 @@ export function PaginaLeccion() {
       <Tarjeta className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="status-chip">
-            Misión {record.lessonIndex + 1} de {record.totalLessons}
+            {missionLabel}
           </span>
           <span className="status-chip">{record.lesson.duration}</span>
           <span className="status-chip">{record.lesson.xp} XP</span>
@@ -640,3 +649,5 @@ export function PaginaLeccion() {
     </div>
   )
 }
+
+

@@ -122,15 +122,15 @@ export function validarNombreVisible(name) {
   const trimmedName = crearNombreCompleto(name)
 
   if (!trimmedName) {
-    return 'Ingresa un nombre visible para crear la cuenta.'
+    return 'Ingresa un nombre de usuario para crear la cuenta.'
   }
 
   if (!DISPLAY_NAME_REGEX.test(trimmedName)) {
-    return 'El nombre visible debe tener entre 3 y 30 caracteres y usar solo letras, números, espacios, punto, guion o guion bajo.'
+    return 'El nombre de usuario debe tener entre 3 y 30 caracteres y usar solo letras, números, espacios, punto, guion o guion bajo.'
   }
 
   if (contienePalabraProhibida(trimmedName)) {
-    return 'Ese nombre visible no está permitido. Usa algo más neutro y respetuoso.'
+    return 'Ese nombre de usuario no está permitido. Usa algo más neutro y respetuoso.'
   }
 
   return ''

@@ -8,6 +8,7 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithRedirect,
   signInWithPopup,
   signOut,
   updatePassword,
@@ -24,6 +25,7 @@ import {
 import {
   asegurarPerfilUsuario,
   buscarPerfilPorCorreo,
+  buscarPerfilPorNombreVisible,
   guardarPerfilUsuario,
 } from './servicioPerfilesFirebase.js'
 import {
@@ -45,6 +47,8 @@ function mapFirebaseError(error) {
       return 'No encontramos una cuenta con ese correo, o la contraseña no coincide.'
     case 'auth/too-many-requests':
       return 'Hay demasiados intentos seguidos. Espera un momento antes de volver a intentar.'
+    case 'auth/popup-blocked':
+      return 'Tu navegador bloqueó la ventana de Google. Habilita popups para este sitio o inténtalo de nuevo.'
     case 'auth/popup-closed-by-user':
       return 'Cerraste la ventana de Google antes de terminar el acceso.'
     case 'auth/cancelled-popup-request':
@@ -62,6 +66,36 @@ function mapFirebaseError(error) {
 
 function createFirebaseError(error) {
   return new Error(mapFirebaseError(error), { cause: error })
+}
+
+const GOOGLE_REDIRECT_SEED_KEY = 'pypath_google_redirect_seed'
+
+function guardarSemillaRedireccionGoogle(profileSeed) {
+  if (typeof window === 'undefined' || !window.sessionStorage) {
+    return
+  }
+
+  window.sessionStorage.setItem(GOOGLE_REDIRECT_SEED_KEY, JSON.stringify(profileSeed ?? {}))
+}
+
+export function consumirSemillaRedireccionGoogle() {
+  if (typeof window === 'undefined' || !window.sessionStorage) {
+    return null
+  }
+
+  const rawValue = window.sessionStorage.getItem(GOOGLE_REDIRECT_SEED_KEY)
+
+  if (!rawValue) {
+    return null
+  }
+
+  window.sessionStorage.removeItem(GOOGLE_REDIRECT_SEED_KEY)
+
+  try {
+    return JSON.parse(rawValue)
+  } catch {
+    return null
+  }
 }
 
 function esUsuarioAdminPrivilegiado(user) {
@@ -161,7 +195,35 @@ export function requiereVerificacionCorreo(user) {
   )
 }
 
-async function resolverEmailIngreso(identifier) {
+async function resolverCorreoDesdeIdentificador(identifier) {
+  const trimmedIdentifier = (identifier ?? '').trim()
+
+  if (!trimmedIdentifier) {
+    throw new Error('Escribe tu correo o nombre de usuario, y tu contraseña.')
+  }
+
+  if (esCorreoValido(trimmedIdentifier)) {
+    return normalizarCorreo(trimmedIdentifier)
+  }
+
+  const owner = await buscarPerfilPorNombreVisible(trimmedIdentifier)
+
+  if (!owner) {
+    throw new Error(
+      'No encontramos una cuenta con ese correo o nombre de usuario, o la contraseña no coincide.',
+    )
+  }
+
+  if (!owner.email) {
+    throw new Error(
+      'Ese nombre de usuario ya existe, pero todavía debes entrar una vez con tu correo para terminar de sincronizarlo.',
+    )
+  }
+
+  return normalizarCorreo(owner.email)
+}
+
+export async function resolverEmailIngreso(identifier) {
   const trimmedIdentifier = (identifier ?? '').trim()
 
   if (!trimmedIdentifier) {
@@ -250,7 +312,7 @@ export async function iniciarSesionConCorreoONickname(formData) {
   asegurarFirebaseConfigurado()
 
   try {
-    const resolvedEmail = await resolverEmailIngreso(formData.identifier)
+    const resolvedEmail = await resolverCorreoDesdeIdentificador(formData.identifier)
     const credential = await signInWithEmailAndPassword(
       firebaseAuth,
       resolvedEmail,
@@ -263,6 +325,17 @@ export async function iniciarSesionConCorreoONickname(formData) {
       activityType: 'login',
     }
   } catch (error) {
+    if (
+      error?.code === 'auth/invalid-credential' ||
+      error?.code === 'auth/user-not-found' ||
+      error?.code === 'auth/wrong-password'
+    ) {
+      throw new Error(
+        'No encontramos una cuenta con ese correo o nombre de usuario, o la contraseña no coincide.',
+        { cause: error },
+      )
+    }
+
     throw createFirebaseError(error)
   }
 }
@@ -279,6 +352,15 @@ export async function iniciarSesionConGoogle(profileSeed = {}) {
       activityType: 'google_login',
     }
   } catch (error) {
+    if (error?.code === 'auth/popup-blocked') {
+      guardarSemillaRedireccionGoogle(profileSeed)
+      await signInWithRedirect(firebaseAuth, googleAuthProvider)
+
+      return {
+        redirectStarted: true,
+      }
+    }
+
     throw createFirebaseError(error)
   }
 }

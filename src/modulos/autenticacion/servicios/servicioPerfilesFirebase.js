@@ -164,7 +164,7 @@ function validarIndices(userId, indices, snapshots) {
 
   const nameSnapshot = indices.name.nextRef ? snapshots.get(indices.name.nextRef.path) : null
   if (nameSnapshot?.exists() && nameSnapshot.data().userId !== userId) {
-    throw new Error('Ese nombre visible ya está en uso. Elige otro distinto.')
+    throw new Error('Ese nombre de usuario ya está en uso. Elige otro distinto.')
   }
 
   const nicknameSnapshot = indices.nickname.nextRef
@@ -196,6 +196,8 @@ function aplicarIndices(transaction, userId, currentProfile, nextProfile, indice
       indices.name.nextRef,
       {
         userId,
+        email: normalizarCorreo(nextProfile.email ?? ''),
+        emailNormalized: normalizarCorreo(nextProfile.email ?? ''),
         name: crearNombreCompleto(nextProfile.name ?? ''),
         nameNormalized: indices.name.nextValue,
         updatedAt: now,
@@ -419,7 +421,7 @@ export async function verificarDisponibilidadNombreVisible(name, currentUserId =
   if (!trimmedName) {
     return {
       status: 'invalid',
-      message: 'Ingresa un nombre visible para crear la cuenta.',
+      message: 'Ingresa un nombre de usuario para crear la cuenta.',
     }
   }
 
@@ -429,26 +431,26 @@ export async function verificarDisponibilidadNombreVisible(name, currentUserId =
     if (!owner) {
       return {
         status: 'available',
-        message: 'Nombre visible disponible.',
+        message: 'Nombre de usuario disponible.',
       }
     }
 
     if (owner.id === currentUserId) {
       return {
         status: 'owned',
-        message: 'Ese nombre visible ya te pertenece.',
+        message: 'Ese nombre de usuario ya te pertenece.',
       }
     }
 
     return {
       status: 'taken',
-      message: 'Ese nombre visible ya está en uso. Elige otro distinto.',
+      message: 'Ese nombre de usuario ya está en uso. Elige otro distinto.',
     }
   } catch {
     return {
       status: 'unknown',
       message:
-        'No pudimos confirmar si ese nombre visible ya existe. Igual lo volveremos a validar al guardar.',
+        'No pudimos confirmar si ese nombre de usuario ya existe. Igual lo volveremos a validar al guardar.',
     }
   }
 }

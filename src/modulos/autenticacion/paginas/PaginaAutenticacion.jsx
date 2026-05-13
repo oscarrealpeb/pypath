@@ -156,7 +156,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
       } else if (!validarNombreVisible(trimmedName)) {
         setNameAvailabilityFeedback({
           status: 'checking',
-          message: 'Validando disponibilidad del nombre visible...',
+          message: 'Validando disponibilidad del nombre de usuario...',
         })
       } else {
         setNameAvailabilityFeedback({ status: 'idle', message: '' })
@@ -254,12 +254,12 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
 
   function validateLoginFields() {
     if (!formState.identifier.trim() || !formState.password.trim()) {
-      setError('Escribe tu correo y tu contraseña.')
+      setError('Escribe tu correo o nombre de usuario, y tu contraseña.')
       return false
     }
 
-    if (!esCorreoValido(formState.identifier)) {
-      setError('Por seguridad, el acceso con contraseña ahora se hace solo con correo.')
+    if (isAdminPortal && !esCorreoValido(formState.identifier)) {
+      setError('El panel administrativo solo permite acceso con correo.')
       return false
     }
 
@@ -271,6 +271,11 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
 
     try {
       const authenticatedUser = await authenticate(payload, mode)
+
+      if (authenticatedUser?.redirectStarted) {
+        return
+      }
+
       const resolvedAuthEmail =
         authenticatedUser.email ?? payload.email ?? payload.identifier ?? ''
 
@@ -409,7 +414,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
                   ? 'Usa el correo autorizado del proyecto para entrar al panel interno.'
                   : isRegister
                     ? 'Pedimos solo lo mínimo para crear tu acceso. El perfil de aprendizaje lo completas después.'
-                    : 'Puedes entrar con correo o Google.'}
+                    : 'Puedes entrar con correo, nombre de usuario o Google.'}
               </p>
             </div>
           </div>
@@ -446,12 +451,12 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
             {isRegister ? (
               <>
                 <label className="block space-y-2">
-                  <span className="text-sm font-medium text-foam">Nombre visible</span>
+                  <span className="text-sm font-medium text-foam">Nombre de usuario</span>
                   <input
                     className="field-input"
                     type="text"
                     name="name"
-                    placeholder="Tu nombre o alias"
+                    placeholder="Elige un nombre de usuario único"
                     value={formState.name}
                     onChange={handleChange}
                   />
@@ -473,12 +478,18 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
               </>
             ) : (
               <label className="block space-y-2">
-                <span className="text-sm font-medium text-foam">Correo</span>
+                <span className="text-sm font-medium text-foam">
+                  {isAdminPortal ? 'Correo' : 'Correo o nombre de usuario'}
+                </span>
                 <input
                   className="field-input"
-                  type="email"
+                  type={isAdminPortal ? 'email' : 'text'}
                   name="identifier"
-                  placeholder="correo@pypath.dev"
+                  placeholder={
+                    isAdminPortal
+                      ? 'admin@pypath.com'
+                      : 'correo@pypath.dev o tu nombre de usuario'
+                  }
                   value={formState.identifier}
                   onChange={handleChange}
                 />

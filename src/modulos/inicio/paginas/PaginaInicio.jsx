@@ -153,6 +153,10 @@ export function PaginaInicio() {
   const { user } = useEstadoApp()
   const { updateUserProfile } = useAccionesApp()
   const catalogoCursos = obtenerCatalogoCursos()
+  const catalogoCursosPublicados = useMemo(
+    () => catalogoCursos.filter((course) => course.status === 'live'),
+    [catalogoCursos],
+  )
   const [formState, setFormState] = useState({
     role: 'programadores',
     interests: ['bases', 'interfaces'],
@@ -468,7 +472,7 @@ export function PaginaInicio() {
             </div>
 
             <div className="grid gap-6 xl:grid-cols-2">
-              {catalogoCursos.map((course) => (
+              {catalogoCursosPublicados.map((course) => (
                 <InteractiveCourseCard key={course.id} course={course} onOpen={openCoursePreview} />
               ))}
             </div>

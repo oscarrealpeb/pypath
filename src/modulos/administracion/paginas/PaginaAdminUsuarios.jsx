@@ -1,8 +1,7 @@
-import { useMemo, useState } from 'react'
+﻿import { useMemo, useState } from 'react'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { esCorreoAdminPrivilegiado } from '../../autenticacion/servicios/clienteFirebase.js'
-import { normalizarNickname } from '../../autenticacion/servicios/servicioValidacionAutenticacion.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 import { obtenerMetricasAdmin, obtenerResumenUsuario } from '../selectores/selectoresAdmin.js'
 
@@ -23,8 +22,7 @@ export function PaginaAdminUsuarios() {
 
       return (
         user.name.toLowerCase().includes(normalizedQuery) ||
-        user.email.toLowerCase().includes(normalizedQuery) ||
-        (user.nicknameNormalized ?? normalizarNickname(user.nickname)).includes(normalizedQuery)
+        user.email.toLowerCase().includes(normalizedQuery)
       )
     })
   }, [query, users])
@@ -111,7 +109,7 @@ export function PaginaAdminUsuarios() {
           <div>
             <p className="eyebrow">Buscar</p>
             <h2 className="mt-4 font-display text-2xl font-semibold text-foam">
-              Filtra por nombre, correo o nickname
+              Filtra por nombre de usuario o correo
             </h2>
           </div>
 
@@ -159,7 +157,6 @@ export function PaginaAdminUsuarios() {
                   <div>
                     <h3 className="font-display text-2xl font-semibold text-foam">{user.name}</h3>
                     <p className="mt-2 text-sm text-mute">{user.email}</p>
-                    <p className="mt-2 text-sm text-mute">Nickname: @{user.nickname ?? 'sin-nickname'}</p>
                     <p className="mt-2 text-sm text-mute">
                       Último acceso:{' '}
                       {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('es-CO') : 'Sin registro'}
@@ -232,3 +229,5 @@ export function PaginaAdminUsuarios() {
     </div>
   )
 }
+
+

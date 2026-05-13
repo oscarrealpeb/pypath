@@ -363,7 +363,8 @@ export function aplicarBorradorLeccion(lesson, draft, courseId) {
   }
 
   if (draft.usesMultipleChallenges) {
-    const { challenge, ...restLesson } = nextLessonBase
+    const restLesson = { ...nextLessonBase }
+    delete restLesson.challenge
     const fallbackChallenges = Array.isArray(lesson.challenges)
       ? lesson.challenges
       : obtenerRetosLeccion(lesson)
@@ -374,7 +375,8 @@ export function aplicarBorradorLeccion(lesson, draft, courseId) {
     }
   }
 
-  const { challenges, ...restLesson } = nextLessonBase
+  const restLesson = { ...nextLessonBase }
+  delete restLesson.challenges
 
   return {
     ...restLesson,

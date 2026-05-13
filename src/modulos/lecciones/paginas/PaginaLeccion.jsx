@@ -291,7 +291,7 @@ function PanelEjemploApoyo({ exampleTitle, exampleCode }) {
     <div className="space-y-4">
       <div>
         <p className="eyebrow">{exampleTitle || 'Ejemplo guiado'}</p>
-        <h3 className="mt-4 font-display text-2xl font-semibold text-foam">Referencia rapida</h3>
+        <h3 className="mt-4 font-display text-2xl font-semibold text-foam">Referencia rápida</h3>
       </div>
       <div className="overflow-hidden rounded-2xl border border-border/80 bg-obsidian/90 p-4">
         <pre className="whitespace-pre-wrap font-mono text-sm text-foam">{exampleCode}</pre>
@@ -408,7 +408,7 @@ export function PaginaLeccion() {
   if (!record) {
     return (
       <Tarjeta className="text-center">
-        <p className="eyebrow">Leccion no encontrada</p>
+        <p className="eyebrow">Lección no encontrada</p>
         <h1 className="mt-5 font-display text-3xl font-semibold text-foam">
           No pudimos encontrar esa misión
         </h1>
@@ -428,7 +428,7 @@ export function PaginaLeccion() {
   if (!unlocked && !completed) {
     return (
       <Tarjeta className="space-y-5 text-center">
-        <p className="eyebrow">Mision bloqueada</p>
+        <p className="eyebrow">Misión bloqueada</p>
         <h1 className="font-display text-3xl font-semibold text-foam">
           Completa el paso anterior para entrar aquí
         </h1>
@@ -493,7 +493,7 @@ export function PaginaLeccion() {
       <Tarjeta className="space-y-5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="status-chip">
-            Mision {record.lessonIndex + 1} de {record.totalLessons}
+            Misión {record.lessonIndex + 1} de {record.totalLessons}
           </span>
           <span className="status-chip">{record.lesson.duration}</span>
           <span className="status-chip">{record.lesson.xp} XP</span>

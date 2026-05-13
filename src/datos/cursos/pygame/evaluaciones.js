@@ -383,69 +383,287 @@ export const evaluacionesPygame = {
           explanation: 'El formato de píxeles no coincidirá con el del monitor, forzando a la CPU a transformar cientos de miles de píxeles en tiempo real.'
         }
       ]
+    },
+    'pygame-proyecto-final': {
+      id: 'pygame-proyecto-checkpoint',
+      title: 'Evaluación de unidad: Proyecto Snake',
+      summary: 'Demuestra que dominas la lógica detrás de uno de los juegos más clásicos de la historia.',
+      passingScore: 3,
+      successMessage: '¡Increíble! Acabas de completar tu proyecto final. Solo te queda la evaluación final del curso.',
+      questions: [
+        {
+          id: 'pygame-snake-q1',
+          prompt: 'En el juego de Snake, ¿cómo se representa idealmente el cuerpo de la serpiente?',
+          options: [
+            { id: 'a', label: 'Como una lista de objetos Rect, donde cada uno es un segmento' },
+            { id: 'b', label: 'Como una sola imagen muy larga' },
+            { id: 'c', label: 'Como múltiples ventanas de Pygame' }
+          ],
+          correctOptionId: 'a',
+          explanation: 'Una lista permite rastrear de forma individual la posición de la cabeza y de cada segmento de la cola.'
+        },
+        {
+          id: 'pygame-snake-q2',
+          prompt: '¿Cómo logramos el efecto visual de que la serpiente "avanza"?',
+          options: [
+            { id: 'a', label: 'Clonamos la cabeza, la movemos, la insertamos al inicio de la lista y eliminamos el último elemento' },
+            { id: 'b', label: 'Le sumamos +1 a todos los elementos al mismo tiempo' },
+            { id: 'c', label: 'Borramos toda la serpiente y la dibujamos de nuevo un píxel más allá' }
+          ],
+          correctOptionId: 'a',
+          explanation: 'El algoritmo de la "oruga" es mucho más eficiente que calcular vectores para cada segmento individualmente.'
+        },
+        {
+          id: 'pygame-snake-q3',
+          prompt: '¿Qué sucede a nivel de código cuando la serpiente "come" una manzana?',
+          options: [
+            { id: 'a', label: 'Omitimos el paso de eliminar el último elemento (el pop), haciendo que la lista sea 1 elemento más larga' },
+            { id: 'b', label: 'Creamos una segunda lista llamada "estomago"' },
+            { id: 'c', label: 'Multiplicamos el tamaño del Rect de la cabeza por 2' }
+          ],
+          correctOptionId: 'a',
+          explanation: 'Al insertar una nueva cabeza y no borrar la cola antigua, la longitud neta de la serpiente crece.'
+        },
+        {
+          id: 'pygame-snake-q4',
+          prompt: 'Para movernos en una "cuadrícula" invisible, la velocidad (vel_x, vel_y) de la serpiente debe ser:',
+          options: [
+            { id: 'a', label: 'Exactamente igual al tamaño de la celda (ej. 20 píxeles)' },
+            { id: 'b', label: 'Un número aleatorio' },
+            { id: 'c', label: 'Siempre 1 píxel por fotograma' }
+          ],
+          correctOptionId: 'a',
+          explanation: 'Mover la cabeza en incrementos del ancho exacto de una celda asegura que siempre encaje en el grid imaginario.'
+        },
+        {
+          id: 'pygame-snake-q5',
+          prompt: '¿Cuál es la forma más limpia en Python de comprobar si la serpiente ha chocado consigo misma (Game Over)?',
+          options: [
+            { id: 'a', label: 'if nueva_cabeza in serpiente:' },
+            { id: 'b', label: 'Creando un loop for anidado de 10 niveles' },
+            { id: 'c', label: 'Midiendo la distancia entre la cabeza y el centro de la pantalla' }
+          ],
+          correctOptionId: 'a',
+          explanation: 'El operador "in" de Python permite buscar eficientemente si un objeto idéntico ya existe dentro de una lista.'
+        }
+      ]
     }
   },
   finalAssessment: {
     id: 'pygame-final',
     title: 'Evaluación final del curso: Pygame',
-    summary: 'Valida que ya puedes abrir la ventana, manejar el loop, dibujar figuras, mover sprites y construir un escenario básico.',
-    passingScore: 3,
-    successMessage: 'Curso finalizado. Ya completaste el curso de Pygame con su evaluación final aprobada.',
+    summary: 'Demuestra que estás listo para crear tus propios juegos dominando todas las mecánicas vistas en el curso.',
+    passingScore: 14,
+    successMessage: '¡Felicidades! Has completado y aprobado el curso de Pygame. Eres oficialmente un desarrollador de videojuegos en Python.',
     questions: [
       {
         id: 'pygame-final-q1',
-        prompt: '¿Qué necesitas antes de dibujar en un juego con Pygame?',
+        prompt: '¿Qué método debes llamar para configurar la ventana gráfica principal del juego?',
         options: [
-          { id: 'a', label: 'Inicializar pygame y crear la ventana' },
-          { id: 'b', label: 'Crear un diccionario de colores' },
-          { id: 'c', label: 'Conectar un slot de señal' }
+          { id: 'a', label: 'pygame.display.set_mode()' },
+          { id: 'b', label: 'pygame.window.create()' },
+          { id: 'c', label: 'pygame.init_screen()' }
         ],
         correctOptionId: 'a',
-        explanation: 'La ventana y la inicialización son el punto de partida obligatorio.'
+        explanation: 'set_mode() es la función que inicializa la ventana principal donde se dibujará todo.'
       },
       {
         id: 'pygame-final-q2',
-        prompt: '¿Para qué sirve el game loop principal?',
+        prompt: 'Para mantener el juego corriendo a una velocidad estable (ej: 60 FPS), ¿qué usas dentro del game loop?',
         options: [
-          { id: 'a', label: 'Para mantener vivo el juego y procesar eventos cada frame' },
-          { id: 'b', label: 'Para imprimir una sola línea en consola' },
-          { id: 'c', label: 'Para crear variables globales del juego' }
+          { id: 'a', label: 'clock.tick(60)' },
+          { id: 'b', label: 'pygame.time.sleep(60)' },
+          { id: 'c', label: 'event.wait(60)' }
         ],
         correctOptionId: 'a',
-        explanation: 'El loop sostiene la lógica, el render y la respuesta a entradas frame a frame.'
+        explanation: 'clock.tick() regula los fotogramas por segundo pausando el loop lo necesario.'
       },
       {
         id: 'pygame-final-q3',
-        prompt: '¿Cómo se mueve un sprite en Pygame?',
+        prompt: '¿Cómo dibujas una imagen (surface) encima de la ventana principal?',
         options: [
-          { id: 'a', label: 'Actualizando su Rect cada frame y redibujando en la nueva posición' },
-          { id: 'b', label: 'Usando pygame.move() dentro del loop' },
-          { id: 'c', label: 'Cambiando el color del sprite cada iteración' }
+          { id: 'a', label: 'Usando screen.blit(imagen, (x, y))' },
+          { id: 'b', label: 'Usando screen.draw(imagen)' },
+          { id: 'c', label: 'Usando pygame.render(imagen)' }
         ],
         correctOptionId: 'a',
-        explanation: 'Modificar rect.x o rect.y y redibujar crea la ilusión de movimiento fluido.'
+        explanation: 'blit (Block Transfer) copia los píxeles de una superficie sobre otra.'
       },
       {
         id: 'pygame-final-q4',
-        prompt: 'Después de dibujar objetos, ¿qué los hace visibles en pantalla?',
+        prompt: 'Al escalar una imagen, ¿qué método de Pygame se usa?',
         options: [
-          { id: 'a', label: 'pygame.display.flip() o update()' },
-          { id: 'b', label: 'pygame.quit()' },
-          { id: 'c', label: 'screen.show()' }
+          { id: 'a', label: 'pygame.transform.scale()' },
+          { id: 'b', label: 'imagen.resize()' },
+          { id: 'c', label: 'pygame.image.zoom()' }
         ],
         correctOptionId: 'a',
-        explanation: 'flip() vuelca el buffer interno a la ventana para mostrar el frame actual.'
+        explanation: 'El módulo transform contiene las funciones para escalar, rotar y espejar superficies.'
       },
       {
         id: 'pygame-final-q5',
-        prompt: '¿Qué convierte una lista de imágenes en una animación?',
+        prompt: '¿Qué método es la forma estándar de saber si dos objetos han chocado en Pygame?',
         options: [
-          { id: 'a', label: 'Un contador que cambia el índice de frame cada ciertos ticks' },
-          { id: 'b', label: 'Un for que dibuja todas las imágenes a la vez' },
-          { id: 'c', label: 'pygame.animate() con la lista como parámetro' }
+          { id: 'a', label: 'rect1.colliderect(rect2)' },
+          { id: 'b', label: 'rect1.touch(rect2)' },
+          { id: 'c', label: 'rect1.intersect(rect2)' }
         ],
         correctOptionId: 'a',
-        explanation: 'Cambiar el fotograma mostrado a una velocidad controlada es todo lo que hace falta para animar.'
+        explanation: 'colliderect compara las geometrías de dos Rects para ver si se superponen.'
+      },
+      {
+        id: 'pygame-final-q6',
+        prompt: '¿Qué clase se encarga puramente de la geometría invisible (posiciones x/y, ancho, alto) sin dibujarse?',
+        options: [
+          { id: 'a', label: 'pygame.Rect' },
+          { id: 'b', label: 'pygame.Hitbox' },
+          { id: 'c', label: 'pygame.Surface' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'El Rect es el corazón de las matemáticas de colisión y posicionamiento en Pygame.'
+      },
+      {
+        id: 'pygame-final-q7',
+        prompt: 'Si quieres simular gravedad, ¿qué debes hacer en cada frame?',
+        options: [
+          { id: 'a', label: 'Sumar un valor constante a la velocidad vertical (vel_y += gravedad)' },
+          { id: 'b', label: 'Aumentar la posición X constantemente' },
+          { id: 'c', label: 'Restar a la velocidad Y constantemente' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'La gravedad es una aceleración constante hacia abajo (eje Y positivo en Pygame).'
+      },
+      {
+        id: 'pygame-final-q8',
+        prompt: 'Para evitar que un jugador atraviese el suelo al caer, al detectar colisión debes:',
+        options: [
+          { id: 'a', label: 'Alinear jugador.bottom = suelo.top y poner su vel_y a 0' },
+          { id: 'b', label: 'Restar vel_y de su posición' },
+          { id: 'c', label: 'Destruir el suelo' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'Esto asegura que el sprite quede reposando exactamente sobre la plataforma sin hundirse.'
+      },
+      {
+        id: 'pygame-final-q9',
+        prompt: '¿Qué paso previo es obligatorio para dibujar texto dinámico (como un puntaje) en pantalla?',
+        options: [
+          { id: 'a', label: 'Usar fuente.render() para convertir el string en una imagen primero' },
+          { id: 'b', label: 'Usar screen.write("Texto")' },
+          { id: 'c', label: 'Convertir el texto a números' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'Pygame no dibuja texto directo; renderiza el texto en una Surface que luego bliteas.'
+      },
+      {
+        id: 'pygame-final-q10',
+        prompt: 'Al cargar imágenes con fondos transparentes, ¿qué método mejora drásticamente el rendimiento?',
+        options: [
+          { id: 'a', label: '.convert_alpha()' },
+          { id: 'b', label: '.optimize()' },
+          { id: 'c', label: '.fast_render()' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'Alinea el formato de color de la imagen con el del monitor para aceleración por hardware.'
+      },
+      {
+        id: 'pygame-final-q11',
+        prompt: '¿Por qué es altamente recomendable usar Clases (POO) en Pygame?',
+        options: [
+          { id: 'a', label: 'Porque agrupa el Rect, velocidades y métodos de cada entidad de forma independiente' },
+          { id: 'b', label: 'Porque Pygame obliga a heredar de sus clases' },
+          { id: 'c', label: 'Porque hace que el juego cargue más rápido' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'La POO evita un mar de variables globales y permite tener múltiples enemigos y proyectiles fácilmente.'
+      },
+      {
+        id: 'pygame-final-q12',
+        prompt: 'Para guardar el "High Score" en disco y que no se pierda al cerrar el juego, lo más sencillo es:',
+        options: [
+          { id: 'a', label: 'Usar el manejo de archivos nativo de Python con open("archivo.txt", "w")' },
+          { id: 'b', label: 'Crear una variable global' },
+          { id: 'c', label: 'Usar pygame.save_state()' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'Pygame delega en Python estándar todo lo que tiene que ver con escritura y lectura de archivos.'
+      },
+      {
+        id: 'pygame-final-q13',
+        prompt: 'En el algoritmo clásico de Snake, ¿cómo se mueve el cuerpo fluidamente por la cuadrícula?',
+        options: [
+          { id: 'a', label: 'Se clona la cabeza, se mueve a la nueva posición, se inserta al inicio y se borra la cola (pop)' },
+          { id: 'b', label: 'Se recalculan las coordenadas x/y de todos los segmentos con un bucle for' },
+          { id: 'c', label: 'Se dibuja un Rect que se estira y se encoge' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'Este enfoque de tipo "oruga" usando listas es extremadamente eficiente y fácil de programar.'
+      },
+      {
+        id: 'pygame-final-q14',
+        prompt: 'En la lógica del juego Snake, ¿qué pasa si la serpiente choca con la manzana?',
+        options: [
+          { id: 'a', label: 'Omitimos la eliminación de la cola (pop), de manera que la serpiente crece en 1 segmento' },
+          { id: 'b', label: 'Le sumamos ancho y alto a todos sus rectángulos' },
+          { id: 'c', label: 'La cabeza cambia de color' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'Al insertar una nueva cabeza y no borrar la cola vieja, el tamaño del array aumenta naturalmente.'
+      },
+      {
+        id: 'pygame-final-q15',
+        prompt: '¿Por qué es obligatorio iterar sobre pygame.event.get() en el loop principal?',
+        options: [
+          { id: 'a', label: 'Para evitar que la ventana se congele procesando las señales del sistema (como clics o el botón de cerrar)' },
+          { id: 'b', label: 'Para que los sprites se muevan más rápido' },
+          { id: 'c', label: 'Para calcular los FPS del juego' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'El sistema operativo necesita que tu juego escuche y procese eventos; si no lo haces, creerá que el juego colapsó.'
+      },
+      {
+        id: 'pygame-final-q16',
+        prompt: 'Para detectar el movimiento continuo de un personaje al mantener pulsada una tecla (ej: flechas de dirección), debes usar:',
+        options: [
+          { id: 'a', label: 'pygame.key.get_pressed()' },
+          { id: 'b', label: 'Esperar un evento KEYDOWN específico cada frame' },
+          { id: 'c', label: 'pygame.mouse.get_pressed()' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'get_pressed() te da una lista constante de qué teclas están hundidas en ese preciso frame, ideal para caminar fluidamente.'
+      },
+      {
+        id: 'pygame-final-q17',
+        prompt: 'Después de usar screen.blit() para pintar elementos y fondos en un frame, ¿qué falta para que el jugador realmente lo vea?',
+        options: [
+          { id: 'a', label: 'Llamar a pygame.display.flip() o update()' },
+          { id: 'b', label: 'Llamar a pygame.display.show()' },
+          { id: 'c', label: 'Nada, blit() actualiza la pantalla de forma instantánea' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'Pygame dibuja en la sombra (buffer oculto). flip() intercambia ese buffer con la ventana para que se vea sin parpadeos.'
+      },
+      {
+        id: 'pygame-final-q18',
+        prompt: '¿Qué clase de Pygame pre-carga audios cortos en memoria para reproducirlos al instante sin lag?',
+        options: [
+          { id: 'a', label: 'pygame.mixer.Sound' },
+          { id: 'b', label: 'pygame.audio.Effect' },
+          { id: 'c', label: 'pygame.music.Short' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'Los objetos Sound son perfectos para efectos repetitivos como láseres, saltos o colisiones.'
+      },
+      {
+        id: 'pygame-final-q19',
+        prompt: '¿Cuál es la forma más estructurada de separar tu "Menú Principal" de la pantalla del "Juego"?',
+        options: [
+          { id: 'a', label: 'Usar una variable de estado (ej: estado = "MENU") y bifurcar la lógica en el loop con if/elif' },
+          { id: 'b', label: 'Abrir una segunda ventana de Pygame' },
+          { id: 'c', label: 'Cargar un archivo .py completamente distinto' }
+        ],
+        correctOptionId: 'a',
+        explanation: 'Las máquinas de estado te permiten usar la misma ventana y el mismo loop, simplemente cambiando qué reglas se ejecutan.'
       }
     ]
   }

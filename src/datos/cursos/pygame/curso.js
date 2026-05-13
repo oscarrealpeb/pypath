@@ -1624,6 +1624,175 @@ export const cursoPygame = {
           ]
         }
       ]
+    },
+    {
+      id: 'pygame-proyecto-final',
+      title: 'Proyecto final',
+      summary: 'Aplica todo lo aprendido desarrollando la lógica de un Snake completo.',
+      lessons: [
+        {
+          id: 'pygame-snake-base',
+          title: 'Misión 01: La cuadrícula y la Serpiente',
+          duration: '15 min',
+          xp: 150,
+          objective: 'Preparar las variables principales simulando una cuadrícula.',
+          resources: {
+            videoTitle: 'Estructura de Snake',
+            videoUrl: 'https://www.youtube.com/embed/nOHwv__awVU',
+            documentationLinks: [],
+            exampleTitle: 'La cuadrícula',
+            exampleCode: `tamaño_celda = 20\nserpiente = [pygame.Rect(100, 100, tamaño_celda, tamaño_celda)]`,
+            supportNote: 'Snake no se mueve píxel a píxel, sino a saltos del tamaño de una celda.'
+          },
+          instructions: {
+            overview: 'Configura tu IDE local para crear un jugador que sea una lista de Rects.',
+            steps: [
+              'Crea una variable tamaño_celda.',
+              'Crea una lista llamada serpiente que contenga el primer bloque (la cabeza).'
+            ],
+            hint: 'Asegúrate de que el ancho y alto del Rect sean iguales a tamaño_celda.'
+          },
+          challenges: [
+            {
+              exerciseType: 'Completar código',
+              title: 'Paso 1: Variables base',
+              prompt: 'Declara celda_size = 20 y crea el primer bloque de la serpiente.',
+              starterCode: `# En tu IDE local, configura esto antes del loop:\n# celda_size = 20\n# cabeza = pygame.Rect(100, 100, celda_size, celda_size)\n# serpiente = [cabeza]`,
+              expectedKeywords: ['celda_size = 20', 'Rect', '[cabeza]'],
+              successCriteria: 'Debes definir el tamaño y la cabeza como el primer elemento de la lista.',
+              expectedResult: 'Estructura de datos lista.',
+              solutionCode: `celda_size = 20\ncabeza = pygame.Rect(100, 100, celda_size, celda_size)\nserpiente = [cabeza]`,
+              solutionNote: 'La serpiente crecerá añadiendo más Rects a esta lista.',
+              salidaGuiada: 'Estructura de datos instanciada.',
+              executionNote: 'Base del juego creada.',
+              successMessage: 'El cuerpo de tu Snake ya tiene un punto de partida.'
+            },
+            {
+              exerciseType: 'Completar código',
+              title: 'Paso 2: Dirección inicial',
+              prompt: 'Crea un vector de dirección inicial (vel_x = celda_size, vel_y = 0).',
+              starterCode: `# vel_x = celda_size\n# vel_y = 0`,
+              expectedKeywords: ['vel_x = celda_size', 'vel_y = 0'],
+              successCriteria: 'La velocidad debe estar anclada al tamaño de la celda.',
+              expectedResult: 'Vectores asignados.',
+              solutionCode: `vel_x = celda_size\nvel_y = 0`,
+              solutionNote: 'De esta forma, en cada fotograma o tick, la serpiente avanzará exactamente una casilla.',
+              salidaGuiada: 'Vectores enlazados a la cuadrícula.',
+              executionNote: 'Movimiento preparado.',
+              successMessage: 'La serpiente sabe hacia dónde ir.'
+            }
+          ]
+        },
+        {
+          id: 'pygame-snake-logica',
+          title: 'Misión 02: Movimiento y lógica de cola',
+          duration: '20 min',
+          xp: 180,
+          objective: 'Hacer que el cuerpo siga a la cabeza.',
+          resources: {
+            videoTitle: 'Movimiento de listas',
+            videoUrl: 'https://www.youtube.com/embed/nOHwv__awVU',
+            documentationLinks: [],
+            exampleTitle: 'Lógica de oruga',
+            exampleCode: `nueva_cabeza = serpiente[0].copy()\nnueva_cabeza.x += vel_x\nserpiente.insert(0, nueva_cabeza)\nserpiente.pop()`,
+            supportNote: 'Para mover un Snake, clonas la cabeza, la mueves, la insertas al inicio de la lista y borras la cola.'
+          },
+          instructions: {
+            overview: 'El truco mágico de Snake es: crear nueva cabeza, insertarla al frente, borrar la cola.',
+            steps: [
+              'Copia el primer elemento de la serpiente (la cabeza).',
+              'Muévelo sumando la velocidad.',
+              'Insértalo en la posición 0 de la lista.',
+              'Haz pop() para eliminar el último bloque.'
+            ],
+            hint: 'insert(0, elemento) pone algo al principio de una lista en Python.'
+          },
+          challenges: [
+            {
+              exerciseType: 'Completar código',
+              title: 'Paso 1: Avanzar la cabeza',
+              prompt: 'Genera una nueva_cabeza usando serpiente[0].copy() y súmale vel_x.',
+              starterCode: `vel_x = 20\nserpiente = [pygame.Rect(100, 100, 20, 20)]\n\n# nueva_cabeza = serpiente[0].copy()\n# nueva_cabeza.x += vel_x`,
+              expectedKeywords: ['copy()', 'nueva_cabeza.x += vel_x'],
+              successCriteria: 'Clonar el objeto y desplazarlo.',
+              expectedResult: 'Cabeza clonada y movida.',
+              solutionCode: `vel_x = 20\nserpiente = [pygame.Rect(100, 100, 20, 20)]\nnueva_cabeza = serpiente[0].copy()\nnueva_cabeza.x += vel_x`,
+              solutionNote: 'La nueva cabeza representa dónde estará la serpiente en el próximo frame.',
+              salidaGuiada: 'Cálculo del próximo movimiento completado.',
+              executionNote: 'Clonación correcta.',
+              successMessage: 'El primer paso del algoritmo funciona.'
+            },
+            {
+              exerciseType: 'Completar código',
+              title: 'Paso 2: Actualizar el cuerpo',
+              prompt: 'Inserta la nueva_cabeza en el índice 0 y elimina el último bloque con pop().',
+              starterCode: `serpiente = [pygame.Rect(100, 100, 20, 20)]\nnueva_cabeza = pygame.Rect(120, 100, 20, 20)\n\n# serpiente.insert(0, nueva_cabeza)\n# serpiente.pop()`,
+              expectedKeywords: ['insert(0', 'pop()'],
+              successCriteria: 'La lista debe actualizarse eliminando la cola para mantener el tamaño.',
+              expectedResult: 'La serpiente se desplaza 1 celda.',
+              solutionCode: `serpiente = [pygame.Rect(100, 100, 20, 20)]\nnueva_cabeza = pygame.Rect(120, 100, 20, 20)\nserpiente.insert(0, nueva_cabeza)\nserpiente.pop()`,
+              solutionNote: 'Si evitas el pop(), la serpiente crece indefinidamente. Ese es el secreto para cuando coma manzanas.',
+              salidaGuiada: 'Longitud mantenida. Movimiento fluido.',
+              executionNote: 'Algoritmo de oruga completado.',
+              successMessage: 'Acabas de programar la mecánica principal de uno de los juegos más famosos de la historia.'
+            }
+          ]
+        },
+        {
+          id: 'pygame-snake-manzanas',
+          title: 'Misión 03: Comida y Game Over',
+          duration: '15 min',
+          xp: 160,
+          objective: 'Crecimiento de la serpiente y detección de fin de juego.',
+          resources: {
+            videoTitle: 'Interacciones de Snake',
+            videoUrl: 'https://www.youtube.com/embed/nOHwv__awVU',
+            documentationLinks: [],
+            exampleTitle: 'Comer',
+            exampleCode: `if cabeza.colliderect(manzana):\n    score += 1\n    # No hacemos pop() para que crezca`,
+            supportNote: 'Si la cabeza choca con la manzana, generas una nueva en otra posición al azar.'
+          },
+          instructions: {
+            overview: 'El crecimiento es simplemente omitir el .pop() cuando chocas con la comida.',
+            steps: [
+              'Detecta colisión entre la nueva_cabeza y la manzana.',
+              'Si no hay colisión, haz pop() normal.',
+              'Si la cabeza choca con el propio cuerpo, Game Over.'
+            ],
+            hint: 'Puedes revisar si hay colisión consigo mismo viendo si nueva_cabeza está in serpiente.'
+          },
+          challenges: [
+            {
+              exerciseType: 'Completar código',
+              title: 'Paso 1: Comer y crecer',
+              prompt: 'Si nueva_cabeza choca con manzana, no hagas nada. Si NO choca, haz serpiente.pop().',
+              starterCode: `manzana = pygame.Rect(120, 100, 20, 20)\nnueva_cabeza = pygame.Rect(120, 100, 20, 20)\nserpiente = []\n\n# if no hay colisión, borramos la cola.\n# if not nueva_cabeza.colliderect(manzana):\n    # serpiente.pop()`,
+              expectedKeywords: ['not', 'colliderect', 'pop()'],
+              successCriteria: 'Condicionar el acortamiento de la lista.',
+              expectedResult: 'Cola conservada si come manzana.',
+              solutionCode: `manzana = pygame.Rect(120, 100, 20, 20)\nnueva_cabeza = pygame.Rect(120, 100, 20, 20)\nserpiente = [pygame.Rect(100, 100, 20, 20)]\nif not nueva_cabeza.colliderect(manzana):\n    serpiente.pop()`,
+              solutionNote: 'Al no borrar el último elemento, al insertar la nueva cabeza la longitud total aumenta en 1.',
+              salidaGuiada: 'Colisión detectada. El cuerpo crece.',
+              executionNote: 'Expansión de array correcta.',
+              successMessage: 'El Snake ya puede engordar.'
+            },
+            {
+              exerciseType: 'Completar código',
+              title: 'Paso 2: Canibalismo (Game Over)',
+              prompt: 'Verifica si nueva_cabeza existe dentro de la lista serpiente antes de insertarla.',
+              starterCode: `nueva_cabeza = pygame.Rect(100, 100, 20, 20)\nserpiente = [pygame.Rect(100, 100, 20, 20)]\njugando = True\n\n# if nueva_cabeza in serpiente:\n    # jugando = False`,
+              expectedKeywords: ['in serpiente', 'jugando = False'],
+              successCriteria: 'Detectar colisión consigo mismo.',
+              expectedResult: 'Bucle principal detenido (GameOver).',
+              solutionCode: `nueva_cabeza = pygame.Rect(100, 100, 20, 20)\nserpiente = [pygame.Rect(100, 100, 20, 20)]\njugando = True\nif nueva_cabeza in serpiente:\n    jugando = False`,
+              solutionNote: 'Python permite comprobar rápidamente si un objeto idéntico ya está en la lista usando "in".',
+              salidaGuiada: 'Mordisco propio detectado.',
+              executionNote: 'Condición de derrota validada.',
+              successMessage: '¡Tienes un juego completamente funcional! Llévate este código a tu IDE y disfrútalo.'
+            }
+          ]
+        }
+      ]
     }
   ]
 }

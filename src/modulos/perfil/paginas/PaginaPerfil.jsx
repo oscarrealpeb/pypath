@@ -121,7 +121,7 @@ export function PaginaPerfil() {
             <div className="space-y-2">
               <p className="eyebrow">Perfil de aprendizaje</p>
               <h1 className="font-display text-4xl font-semibold text-foam">
-                {user?.name ?? 'Operador'} en PyPath
+                {user?.name ?? 'Jasson'} - Ing. Sistemas en PyPath
               </h1>
               <p className="text-mute">
                 {profileLabels.roleLabel} / Nivel {profileLabels.experienceLabel}

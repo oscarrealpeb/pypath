@@ -6,8 +6,8 @@ export const catalogoPandasFinanzas = {
   ],
   title: 'Pandas para datos y finanzas',
   description: 'Limpia datasets, automatiza reportes y crea tableros analíticos a partir de CSVs y hojas de cálculo.',
-  status: 'soon',
-  statusLabel: 'Proximamente',
+  status: 'live',
+  statusLabel: 'Disponible',
   intensity: 'Baja',
   duration: '2 semanas',
   audience: [

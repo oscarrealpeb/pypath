@@ -27,9 +27,7 @@ export const cursos = [
   cursoFundamentosPython,
   cursoPySide6,
   cursoPygame,
-  // Cuando Pandas quede listo para mostrarse como curso activo,
-  // descomenta la siguiente linea:
-  // cursoPandasFinanzas,
+  cursoPandasFinanzas,
 ]
 
 export const catalogoCursos = [
@@ -44,15 +42,8 @@ export const evaluacionesCursos = {
   'python-fundamentals': evaluacionesFundamentosPython,
   pyside6: evaluacionesPySide6,
   pygame: evaluacionesPygame,
-  // Cuando Pandas quede listo para usarse en la app,
-  // descomenta la siguiente linea:
-  // 'pandas-finanzas': evaluacionesPandasFinanzas,
+  'pandas-finanzas': evaluacionesPandasFinanzas,
 }
 
 export const cursosBorrador = {
-  'pandas-finanzas': {
-    course: cursoPandasFinanzas,
-    catalog: catalogoPandasFinanzas,
-    assessments: evaluacionesPandasFinanzas,
-  },
 }

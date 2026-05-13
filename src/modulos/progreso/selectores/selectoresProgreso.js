@@ -85,14 +85,12 @@ export function unidadEstaDesbloqueada(
   unitId,
   assessmentResult = null,
 ) {
-  const record = obtenerRegistroEvaluacionUnidad(courseId, unitId)
+  const course = obtenerCursoPorId(courseId)
+  const unitIndex = course?.units.findIndex((item) => item.id === unitId) ?? -1
 
-  if (!record) {
+  if (!course || unitIndex < 0) {
     return false
   }
-
-  const { course, unit } = record
-  const unitIndex = course.units.findIndex((item) => item.id === unit.id)
 
   if (unitIndex === 0) {
     return areCoursePrerequisitesCompleted(
@@ -112,7 +110,7 @@ export function unidadEstaDesbloqueada(
         completedUnitAssessments,
         previousAssessmentRecord.assessment.id,
       )
-    : false
+    : previousUnit.lessons.every((lesson) => completedLessons.includes(lesson.id))
 }
 
 export function leccionEstaDesbloqueada(

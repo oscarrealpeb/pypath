@@ -11,7 +11,7 @@ function obtenerRecomendacionPorPorcentaje(score, total) {
       recommendedLessonId: 'hola-python',
       canSkipFundamentals: false,
       summary:
-        'Todavía necesitas construir la base. Empieza por Fundamentos de Python antes de abrir cualquier otro curso.',
+        'Todavía necesitas construir la base. Empieza por Fundamentos de Python en la lección inicial antes de abrir cualquier otro curso.',
     }
   }
 
@@ -19,11 +19,11 @@ function obtenerRecomendacionPorPorcentaje(score, total) {
     return {
       level: 'Intermedio',
       recommendedCourseId: 'python-fundamentals',
-      recommendedUnitId: 'python-boot',
-      recommendedLessonId: 'hola-python',
+      recommendedUnitId: 'python-tools',
+      recommendedLessonId: 'funciones-python',
       canSkipFundamentals: false,
       summary:
-        'Tu lógica de Python va mejorando, pero aún conviene cerrar Fundamentos antes de pasar a otros cursos.',
+        'Tu lógica de Python va mejorando. Continúa en Fundamentos de Python en una unidad más avanzada antes de pasar a otros cursos.',
     }
   }
 

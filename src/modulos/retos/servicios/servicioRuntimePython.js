@@ -60,6 +60,21 @@ function formatRuntimeError(error, stderrBuffer) {
   return error instanceof Error ? error.message : 'La ejecución falló por un error inesperado.'
 }
 
+function normalizePythonOutput(output) {
+  return String(output ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(
+      (line) =>
+        line &&
+        !/already loaded from default channel/i.test(line) &&
+        !/no new packages to load/i.test(line) &&
+        !/loading package/i.test(line) &&
+        !/installing packages/i.test(line),
+    )
+    .join('\n')
+}
+
 export async function ejecutarRetoPython(code) {
   const trimmedCode = code.trim()
 
@@ -92,7 +107,7 @@ export async function ejecutarRetoPython(code) {
     await pyodide.loadPackagesFromImports(trimmedCode)
     const result = await pyodide.runPythonAsync(trimmedCode)
 
-    let derivedOutput = stdoutBuffer.join('\n').trim()
+    let derivedOutput = normalizePythonOutput(stdoutBuffer.join('\n'))
 
     if (!derivedOutput && result !== undefined && result !== null) {
       derivedOutput = String(result)

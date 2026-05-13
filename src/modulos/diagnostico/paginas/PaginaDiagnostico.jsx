@@ -4,6 +4,7 @@ import { Boton } from '../../../componentes/Boton.jsx'
 import { Modal } from '../../../componentes/Modal.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import {
+  CANTIDAD_PREGUNTAS_DIAGNOSTICO,
   DURACION_DIAGNOSTICO_MINUTOS,
   obtenerPreguntasDiagnosticoPorIds,
 } from '../../../datos/preguntasDiagnostico.js'
@@ -267,7 +268,7 @@ export function PaginaDiagnostico() {
                 </p>
                 <div className="rounded-2xl border border-border/80 bg-white/5 p-4 text-sm text-mute">
                   Duración estimada: {DURACION_DIAGNOSTICO_MINUTOS} minutos. Tendrás un solo intento y
-                  se seleccionarán 10 preguntas aleatorias desde el banco del sistema.
+                  se seleccionarán {CANTIDAD_PREGUNTAS_DIAGNOSTICO} preguntas aleatorias desde el banco del sistema.
                 </div>
               </div>
 
@@ -302,7 +303,7 @@ export function PaginaDiagnostico() {
               Esta evaluación tiene tiempo y un solo intento
             </h2>
             <p className="text-mute">
-              Responderás 10 preguntas aleatorias de fundamentos de Python. Tendrás{' '}
+              Responderás {CANTIDAD_PREGUNTAS_DIAGNOSTICO} preguntas aleatorias de fundamentos de Python. Tendrás{' '}
               {DURACION_DIAGNOSTICO_MINUTOS} minutos y, una vez la abras, esa será tu única
               oportunidad de presentar el diagnóstico.
             </p>

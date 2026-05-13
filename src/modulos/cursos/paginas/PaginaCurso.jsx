@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
@@ -16,6 +16,70 @@ import {
 } from '../../progreso/selectores/selectoresProgreso.js'
 import { TarjetaUnidad } from '../componentes/TarjetaUnidad.jsx'
 import { obtenerCursoPorId, obtenerProgresoCurso } from '../selectores/selectoresCursos.js'
+
+function UnidadesPaginadas({ courseId, units, progress, assessmentResult, recommendedUnitId }) {
+  const [paginaActual, setPaginaActual] = useState(0)
+  const total = units.length
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="eyebrow">Unidades</p>
+          <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
+            Curso / Unidades / Lecciones
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="text-sm tabular-nums text-mute">
+            {paginaActual + 1} / {total}
+          </span>
+          <button
+            onClick={() => setPaginaActual((p) => Math.max(0, p - 1))}
+            disabled={paginaActual === 0}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/80 bg-panel-2/70 text-foam transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Unidad anterior"
+          >
+            ←
+          </button>
+          <button
+            onClick={() => setPaginaActual((p) => Math.min(total - 1, p + 1))}
+            disabled={paginaActual === total - 1}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/80 bg-panel-2/70 text-foam transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Siguiente unidad"
+          >
+            →
+          </button>
+        </div>
+      </div>
+
+      <TarjetaUnidad
+        key={units[paginaActual].id}
+        courseId={courseId}
+        unit={units[paginaActual]}
+        progress={progress}
+        assessmentResult={assessmentResult}
+        recommendedUnitId={recommendedUnitId}
+      />
+
+      {total > 1 && (
+        <div className="flex justify-center gap-2 pt-1">
+          {units.map((_, index) => (
+            <button
+              key={index}
+              onClick={() => setPaginaActual(index)}
+              aria-label={`Ir a unidad ${index + 1}`}
+              className={`h-2 rounded-full transition-all ${
+                index === paginaActual ? 'w-6 bg-primary' : 'w-2 bg-border/50 hover:bg-border'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
 
 export function PaginaCurso() {
   const navigate = useNavigate()
@@ -68,47 +132,6 @@ export function PaginaCurso() {
     (course.requiredCourseIds?.length ?? 0) > 0 &&
     courseProgress.completedCount === 0 &&
     !courseSummary.prerequisitesResolved
-
-  const unitsCarouselRef = useRef(null)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
-  const [currentUnitIndex, setCurrentUnitIndex] = useState(0)
-
-  useEffect(() => {
-    const container = unitsCarouselRef.current
-    if (!container) {
-      return undefined
-    }
-
-    const updateScrollState = () => {
-      setCanScrollLeft(container.scrollLeft > 8)
-      setCanScrollRight(container.scrollLeft + container.clientWidth < container.scrollWidth - 8)
-    }
-
-    updateScrollState()
-    container.addEventListener('scroll', updateScrollState)
-    window.addEventListener('resize', updateScrollState)
-
-    return () => {
-      container.removeEventListener('scroll', updateScrollState)
-      window.removeEventListener('resize', updateScrollState)
-    }
-  }, [course.units.length])
-
-  function scrollUnits(direction) {
-    const container = unitsCarouselRef.current
-    if (!container) {
-      return
-    }
-
-    const nextIndex = Math.max(0, Math.min(course.units.length - 1, currentUnitIndex + direction))
-    setCurrentUnitIndex(nextIndex)
-
-    const cards = container.querySelectorAll(':scope > div')
-    if (cards[nextIndex]) {
-      cards[nextIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'start' })
-    }
-  }
 
   return (
     <div className="space-y-8">
@@ -207,67 +230,20 @@ export function PaginaCurso() {
         )}
 
         {isBlockedByPrerequisites && (
-        <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-yellow-100">
-            Este curso sigue bloqueado porque antes debes completar los prerrequisitos,
-            en especial Fundamentos de Python.
+          <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-yellow-100">
+            Este curso sigue bloqueado porque antes debes completar los prerrequisitos, en
+            especial Fundamentos de Python.
           </div>
         )}
       </Tarjeta>
 
-      <section className="space-y-4">
-        <div>
-          <p className="eyebrow">Unidades</p>
-          <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
-            Curso / Unidades / Lecciones
-          </h2>
-        </div>
-
-        <div className="space-y-4 rounded-3xl border border-border/80 bg-white/5 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="text-sm text-mute">Desplaza las unidades horizontalmente usando las flechas.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Boton
-                variant="secondary"
-                size="sm"
-                disabled={currentUnitIndex === 0}
-                onClick={() => scrollUnits(-1)}
-                className="px-2"
-              >
-                ←
-              </Boton>
-              <Boton
-                variant="secondary"
-                size="sm"
-                disabled={currentUnitIndex >= course.units.length - 1}
-                onClick={() => scrollUnits(1)}
-                className="px-2"
-              >
-                →
-              </Boton>
-            </div>
-          </div>
-
-          <div
-            ref={unitsCarouselRef}
-            className="flex gap-6 overflow-x-auto scroll-smooth pb-4 pr-2"
-            style={{ scrollSnapType: 'x mandatory' }}
-          >
-            {course.units.map((unit) => (
-              <div key={unit.id} className="min-w-full flex-shrink-0 snap-start">
-                <TarjetaUnidad
-                  courseId={course.id}
-                  unit={unit}
-                  progress={progress}
-                  assessmentResult={onboarding.assessmentResult}
-                  recommendedUnitId={onboarding.assessmentResult?.recommendedUnitId}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <UnidadesPaginadas
+        courseId={course.id}
+        units={course.units}
+        progress={progress}
+        assessmentResult={onboarding.assessmentResult}
+        recommendedUnitId={onboarding.assessmentResult?.recommendedUnitId}
+      />
 
       {finalAssessmentRecord && (
         <section className="space-y-4">

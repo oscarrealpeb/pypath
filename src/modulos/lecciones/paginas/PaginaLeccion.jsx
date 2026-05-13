@@ -287,7 +287,7 @@ export function PaginaLeccion() {
           </span>
           <span className="status-chip">{record.lesson.duration}</span>
           <span className="status-chip">{record.lesson.xp} XP</span>
-          <span className="status-chip">{record.lesson.challenge.exerciseType}</span>
+          <span className="status-chip">{record.lesson.challenges ? 'Múltiples ejercicios' : record.lesson.challenge.exerciseType}</span>
         </div>
 
         <div>

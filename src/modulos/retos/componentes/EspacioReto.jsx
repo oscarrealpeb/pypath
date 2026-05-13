@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
@@ -34,8 +34,8 @@ function getConsoleTone(status) {
   return 'border-border/80 bg-white/5'
 }
 
-function getRuntimeMeta(lesson) {
-  const usesRealPython = lesson.challenge.runtimeMode === 'python'
+function getRuntimeMeta(challenge) {
+  const usesRealPython = challenge.runtimeMode === 'python'
 
   if (usesRealPython) {
     return {
@@ -78,23 +78,23 @@ function contarLineas(texto = '') {
   return texto.split('\n').length
 }
 
-function obtenerAlturaEditor(lesson, solutionCode) {
-  if (lesson.challenge.editorHeight) {
+function obtenerAlturaEditor(challenge, solutionCode) {
+  if (challenge.editorHeight) {
     return {
-      codeMirrorHeight: lesson.challenge.editorHeight,
+      codeMirrorHeight: challenge.editorHeight,
       fallbackClass:
-        lesson.challenge.editorHeight === '250px'
+        challenge.editorHeight === '250px'
           ? 'h-[250px]'
-          : lesson.challenge.editorHeight === '310px'
+          : challenge.editorHeight === '310px'
             ? 'h-[310px]'
-            : lesson.challenge.editorHeight === '370px'
+            : challenge.editorHeight === '370px'
               ? 'h-[370px]'
               : 'h-[430px]',
     }
   }
 
   const lineasBase = Math.max(
-    contarLineas(lesson.challenge.starterCode),
+    contarLineas(challenge.starterCode),
     contarLineas(solutionCode),
   )
 
@@ -116,16 +116,23 @@ function obtenerAlturaEditor(lesson, solutionCode) {
 export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
   const navigate = useNavigate()
   const { completeLesson } = useAccionesApp()
-  const runtimeMeta = getRuntimeMeta(lesson)
+  
+  const challenges = lesson.challenges || [lesson.challenge]
+  const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0)
+  const currentChallenge = challenges[currentChallengeIndex]
+  const isLastChallenge = currentChallengeIndex === challenges.length - 1
+
+  const runtimeMeta = getRuntimeMeta(currentChallenge)
   const solutionCode =
-    lesson.challenge.solutionCode ?? lesson.resources.exampleCode ?? lesson.challenge.starterCode
+    currentChallenge.solutionCode ?? lesson.resources.exampleCode ?? currentChallenge.starterCode
   const solutionNote =
-    lesson.challenge.solutionNote ??
+    currentChallenge.solutionNote ??
     'Compárala con tu intento para entender qué pieza faltaba o qué detalle debía cambiar.'
-  const editorHeight = obtenerAlturaEditor(lesson, solutionCode)
-  const [code, setCode] = useState(lesson.challenge.starterCode)
+  const editorHeight = obtenerAlturaEditor(currentChallenge, solutionCode)
+  
+  const [code, setCode] = useState(currentChallenge.starterCode)
   const [feedback, setFeedback] = useState(
-    isCompleted
+    isCompleted && isLastChallenge
       ? {
           status: 'success',
           message: 'Esta misión ya está completada. Puedes repasar el código o seguir avanzando.',
@@ -137,6 +144,22 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
   const [isRunning, setIsRunning] = useState(false)
   const [showSolution, setShowSolution] = useState(false)
 
+  useEffect(() => {
+    setCode(currentChallenge.starterCode)
+    setFeedback(
+      isCompleted && isLastChallenge
+        ? {
+            status: 'success',
+            message: 'Esta misión ya está completada. Puedes repasar el código o seguir avanzando.',
+            missingKeywords: [],
+          }
+        : null
+    )
+    setExecutionResult(null)
+    setIsRunning(false)
+    setShowSolution(false)
+  }, [currentChallengeIndex, currentChallenge.starterCode, isCompleted, isLastChallenge])
+
   function handleCodeChange(nextCode) {
     setCode(nextCode)
     setShowSolution(false)
@@ -147,7 +170,7 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
       return ejecutarRetoPython(code)
     }
 
-    return ejecutarSimulacionReto(code, lesson)
+    return ejecutarSimulacionReto(code, { ...lesson, challenge: currentChallenge })
   }
 
   async function handleRun() {
@@ -171,12 +194,14 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
       const latestExecution = await executeCurrentCode()
       setExecutionResult(latestExecution)
 
-      const result = validarReto(code, lesson, latestExecution)
+      const result = validarReto(code, { ...lesson, challenge: currentChallenge }, latestExecution)
       setFeedback(result)
 
       if (result.status === 'success') {
         setShowSolution(false)
-        completeLesson(lesson.id)
+        if (isLastChallenge) {
+          completeLesson(lesson.id)
+        }
       }
     } finally {
       setIsRunning(false)
@@ -190,23 +215,25 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
       <Tarjeta className="space-y-5">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="eyebrow">Reto práctico</span>
-            <span className="status-chip">{lesson.challenge.exerciseType}</span>
+            <span className="eyebrow">
+              Reto práctico {challenges.length > 1 ? `(${currentChallengeIndex + 1}/${challenges.length})` : ''}
+            </span>
+            <span className="status-chip">{currentChallenge.exerciseType}</span>
             <span className="status-chip">{runtimeMeta.eyebrow}</span>
           </div>
           <h2 className="font-display text-3xl font-semibold text-foam">
-            {lesson.challenge.title}
+            {currentChallenge.title}
           </h2>
-          <p className="max-w-3xl text-mute">{lesson.challenge.prompt}</p>
+          <p className="max-w-3xl text-mute">{currentChallenge.prompt}</p>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-mute">Qué debe hacer tu solución</p>
-            <p className="mt-3 text-sm leading-7 text-mute">{lesson.challenge.successCriteria}</p>
+            <p className="mt-3 text-sm leading-7 text-mute">{currentChallenge.successCriteria}</p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {lesson.challenge.expectedKeywords.map((keyword) => (
+              {currentChallenge.expectedKeywords.map((keyword) => (
                 <span key={keyword} className="status-chip">
                   {keyword}
                 </span>
@@ -217,7 +244,7 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
           <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-mute">Qué se espera ver</p>
             <div className="mt-3 rounded-2xl border border-border/70 bg-obsidian/80 p-4 font-mono text-sm text-foam">
-              <pre className="whitespace-pre-wrap">{lesson.challenge.expectedResult}</pre>
+              <pre className="whitespace-pre-wrap">{currentChallenge.expectedResult}</pre>
             </div>
             <p className="mt-3 text-sm leading-7 text-mute">{runtimeMeta.description}</p>
           </div>
@@ -268,7 +295,7 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
           <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-mute">Resultado esperado</p>
             <div className="mt-3 rounded-2xl border border-border/70 bg-obsidian/80 p-4 font-mono text-sm text-foam">
-              <pre className="whitespace-pre-wrap">{lesson.challenge.expectedResult}</pre>
+              <pre className="whitespace-pre-wrap">{currentChallenge.expectedResult}</pre>
             </div>
           </div>
 
@@ -350,16 +377,24 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
 
         {isSuccess && (
           <div className="flex flex-col gap-3 sm:flex-row">
-            {completionStep ? (
-              <Boton onClick={() => navigate(obtenerRutaEvaluacionDesdePaso(completionStep))}>
-                {completionStep.label}
+            {!isLastChallenge ? (
+              <Boton onClick={() => setCurrentChallengeIndex(i => i + 1)}>
+                Siguiente Ejercicio
               </Boton>
             ) : (
-              <Boton onClick={() => navigate(`/course/${courseId}`)}>Volver al curso</Boton>
+              <>
+                {completionStep ? (
+                  <Boton onClick={() => navigate(obtenerRutaEvaluacionDesdePaso(completionStep))}>
+                    {completionStep.label}
+                  </Boton>
+                ) : (
+                  <Boton onClick={() => navigate(`/course/${courseId}`)}>Volver al curso</Boton>
+                )}
+                <Boton variant="secondary" onClick={() => navigate(`/course/${courseId}`)}>
+                  Ver mapa del curso
+                </Boton>
+              </>
             )}
-            <Boton variant="secondary" onClick={() => navigate(`/course/${courseId}`)}>
-              Ver mapa del curso
-            </Boton>
           </div>
         )}
       </Tarjeta>

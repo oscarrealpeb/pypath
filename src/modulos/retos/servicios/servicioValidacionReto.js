@@ -19,7 +19,22 @@ export function validarReto(code, lesson, executionResult = null) {
     }
   }
 
-  const normalizedCode = trimmedCode.toLowerCase()
+  // Removemos comentarios para no validar código comentado
+  let codeWithoutComments = code
+    .replace(/\/\*[\s\S]*?\*\//g, '') // /* JS multiline */
+    .replace(/\/\/.*/g, '')           // // JS single line
+    .replace(/#.*/g, '')              // # Python single line
+
+  // Evitar validación exitosa si no ha modificado el starter code en absoluto
+  if (trimmedCode === lesson.challenge.starterCode.trim()) {
+    return {
+      status: 'error',
+      message: 'Parece que no has modificado el código base. Intenta resolver el reto antes de validar.',
+      missingKeywords: [],
+    }
+  }
+
+  const normalizedCode = codeWithoutComments.trim().toLowerCase()
   const missingKeywords = lesson.challenge.expectedKeywords.filter(
     (keyword) => !normalizedCode.includes(keyword.toLowerCase()),
   )

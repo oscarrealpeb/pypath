@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
@@ -15,6 +16,72 @@ import {
 } from '../../progreso/selectores/selectoresProgreso.js'
 import { TarjetaUnidad } from '../componentes/TarjetaUnidad.jsx'
 import { obtenerCursoPorId, obtenerProgresoCurso } from '../selectores/selectoresCursos.js'
+
+function UnidadesPaginadas({ courseId, units, progress, assessmentResult, recommendedUnitId }) {
+  const [paginaActual, setPaginaActual] = useState(0)
+  const total = units.length
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="eyebrow">Unidades</p>
+          <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
+            Curso / Unidades / Lecciones
+          </h2>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <span className="text-sm tabular-nums text-mute">
+            {paginaActual + 1} / {total}
+          </span>
+          <button
+            onClick={() => setPaginaActual((p) => Math.max(0, p - 1))}
+            disabled={paginaActual === 0}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/80 bg-panel-2/70 text-foam transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Unidad anterior"
+          >
+            ←
+          </button>
+          <button
+            onClick={() => setPaginaActual((p) => Math.min(total - 1, p + 1))}
+            disabled={paginaActual === total - 1}
+            className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/80 bg-panel-2/70 text-foam transition hover:border-primary/40 hover:bg-primary/10 disabled:cursor-not-allowed disabled:opacity-30"
+            aria-label="Siguiente unidad"
+          >
+            →
+          </button>
+        </div>
+      </div>
+
+      <TarjetaUnidad
+        key={units[paginaActual].id}
+        courseId={courseId}
+        unit={units[paginaActual]}
+        progress={progress}
+        assessmentResult={assessmentResult}
+        recommendedUnitId={recommendedUnitId}
+      />
+
+      {total > 1 && (
+        <div className="flex justify-center gap-2 pt-1">
+          {units.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setPaginaActual(i)}
+              aria-label={`Ir a unidad ${i + 1}`}
+              className={`h-2 rounded-full transition-all ${
+                i === paginaActual
+                  ? 'w-6 bg-primary'
+                  : 'w-2 bg-border/50 hover:bg-border'
+              }`}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
 
 export function PaginaCurso() {
   const navigate = useNavigate()
@@ -172,27 +239,13 @@ export function PaginaCurso() {
         )}
       </Tarjeta>
 
-      <section className="space-y-4">
-        <div>
-          <p className="eyebrow">Unidades</p>
-          <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
-            Curso / Unidades / Lecciones
-          </h2>
-        </div>
-
-        <div className="grid gap-6">
-          {course.units.map((unit) => (
-            <TarjetaUnidad
-              key={unit.id}
-              courseId={course.id}
-              unit={unit}
-              progress={progress}
-              assessmentResult={onboarding.assessmentResult}
-              recommendedUnitId={onboarding.assessmentResult?.recommendedUnitId}
-            />
-          ))}
-        </div>
-      </section>
+      <UnidadesPaginadas
+        courseId={course.id}
+        units={course.units}
+        progress={progress}
+        assessmentResult={onboarding.assessmentResult}
+        recommendedUnitId={onboarding.assessmentResult?.recommendedUnitId}
+      />
 
       {finalAssessmentRecord && (
         <section className="space-y-4">

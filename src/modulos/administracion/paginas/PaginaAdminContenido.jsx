@@ -519,6 +519,7 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
   const [draft, setDraft] = useState(() => construirBorradorLeccion(lesson))
   const supportsPythonRuntime = permiteRuntimePython(courseId)
   const visibleRuntimeMode = supportsPythonRuntime ? draft.runtimeMode : 'guided'
+  const usesMultipleChallenges = draft.usesMultipleChallenges
 
   function setDraftField(field, value) {
     setDraft((current) => ({ ...current, [field]: value }))
@@ -743,7 +744,27 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
             <h3 className="mt-3 font-display text-xl font-semibold text-foam">Challenge</h3>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-2">
+          {usesMultipleChallenges ? (
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4 text-sm text-mute">
+                Esta lección usa múltiples ejercicios dentro de la misma misión. Para mantener
+                compatibilidad con el curso original, aquí se edita el bloque completo como JSON.
+              </div>
+              <TextareaField
+                label="Ejercicios múltiples (JSON)"
+                textareaClassName="min-h-72 font-mono text-sm"
+                value={draft.challengesJson}
+                help={{
+                  title: 'Ejercicios múltiples',
+                  body:
+                    'Cada elemento del arreglo representa un paso o reto. Mantén la misma estructura que vino por código para no romper el curso original.',
+                }}
+                onChange={(event) => setDraftField('challengesJson', event.target.value)}
+                hint="Si el JSON es inválido, el CMS conserva la versión anterior para proteger la lección."
+              />
+            </div>
+          ) : (
+            <div className="grid gap-4 lg:grid-cols-2">
             <InputField
               label="Tipo de ejercicio"
               value={draft.exerciseType}
@@ -848,7 +869,8 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
               value={draft.successMessage}
               onChange={(event) => setDraftField('successMessage', event.target.value)}
             />
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </Tarjeta>

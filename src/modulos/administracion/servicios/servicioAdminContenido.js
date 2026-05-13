@@ -274,7 +274,23 @@ export function crearPlantillaLeccion(name, courseId, unitId, lessonCount = 0) {
   }
 }
 
+function obtenerRetosLeccion(lesson) {
+  if (Array.isArray(lesson.challenges) && lesson.challenges.length > 0) {
+    return lesson.challenges
+  }
+
+  if (lesson.challenge) {
+    return [lesson.challenge]
+  }
+
+  return []
+}
+
 export function construirBorradorLeccion(lesson) {
+  const lessonChallenges = obtenerRetosLeccion(lesson)
+  const primaryChallenge = lessonChallenges[0] ?? {}
+  const usesMultipleChallenges = Array.isArray(lesson.challenges) && lesson.challenges.length > 0
+
   return {
     title: lesson.title,
     duration: lesson.duration,
@@ -292,20 +308,22 @@ export function construirBorradorLeccion(lesson) {
     instructionsOverview: lesson.instructions.overview,
     instructionsStepsText: (lesson.instructions.steps ?? []).join('\n'),
     instructionsHint: lesson.instructions.hint,
-    runtimeMode: lesson.challenge.runtimeMode ?? 'guided',
-    exerciseType: lesson.challenge.exerciseType,
-    challengeTitle: lesson.challenge.title,
-    prompt: lesson.challenge.prompt,
-    starterCode: lesson.challenge.starterCode,
-    editorHeight: lesson.challenge.editorHeight ?? '310px',
-    expectedKeywordsText: (lesson.challenge.expectedKeywords ?? []).join(', '),
-    successCriteria: lesson.challenge.successCriteria,
-    expectedResult: lesson.challenge.expectedResult,
-    solutionCode: lesson.challenge.solutionCode ?? '',
-    solutionNote: lesson.challenge.solutionNote ?? '',
-    salidaGuiada: lesson.challenge.salidaGuiada,
-    executionNote: lesson.challenge.executionNote,
-    successMessage: lesson.challenge.successMessage,
+    runtimeMode: primaryChallenge.runtimeMode ?? 'guided',
+    exerciseType: primaryChallenge.exerciseType ?? 'Completar código',
+    challengeTitle: primaryChallenge.title ?? '',
+    prompt: primaryChallenge.prompt ?? '',
+    starterCode: primaryChallenge.starterCode ?? '',
+    editorHeight: primaryChallenge.editorHeight ?? '310px',
+    expectedKeywordsText: (primaryChallenge.expectedKeywords ?? []).join(', '),
+    successCriteria: primaryChallenge.successCriteria ?? '',
+    expectedResult: primaryChallenge.expectedResult ?? '',
+    solutionCode: primaryChallenge.solutionCode ?? '',
+    solutionNote: primaryChallenge.solutionNote ?? '',
+    salidaGuiada: primaryChallenge.salidaGuiada ?? '',
+    executionNote: primaryChallenge.executionNote ?? '',
+    successMessage: primaryChallenge.successMessage ?? '',
+    usesMultipleChallenges,
+    challengesJson: serializarJsonLegible(lessonChallenges),
   }
 }
 
@@ -313,7 +331,7 @@ export function aplicarBorradorLeccion(lesson, draft, courseId) {
   const runtimeMode =
     draft.runtimeMode === 'python' && permiteRuntimePython(courseId) ? 'python' : 'guided'
 
-  return {
+  const nextLessonBase = {
     ...lesson,
     title: draft.title.trim() || lesson.title,
     duration: draft.duration.trim() || lesson.duration,
@@ -342,6 +360,24 @@ export function aplicarBorradorLeccion(lesson, draft, courseId) {
       steps: parsearListaMultilinea(draft.instructionsStepsText),
       hint: draft.instructionsHint.trim() || lesson.instructions.hint,
     },
+  }
+
+  if (draft.usesMultipleChallenges) {
+    const { challenge, ...restLesson } = nextLessonBase
+    const fallbackChallenges = Array.isArray(lesson.challenges)
+      ? lesson.challenges
+      : obtenerRetosLeccion(lesson)
+
+    return {
+      ...restLesson,
+      challenges: parsearJsonConRespaldo(draft.challengesJson, fallbackChallenges),
+    }
+  }
+
+  const { challenges, ...restLesson } = nextLessonBase
+
+  return {
+    ...restLesson,
     challenge: {
       ...lesson.challenge,
       runtimeMode,

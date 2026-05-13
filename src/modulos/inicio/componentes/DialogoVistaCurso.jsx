@@ -6,6 +6,16 @@ function getLessonCount(course) {
   return course.units.reduce((count, unit) => count + unit.lessons.length, 0)
 }
 
+function getLessonExerciseType(lesson) {
+  if (Array.isArray(lesson.challenges) && lesson.challenges.length > 0) {
+    return lesson.challenges.length === 1
+      ? lesson.challenges[0]?.exerciseType || 'Ejercicio guiado'
+      : 'Múltiples ejercicios'
+  }
+
+  return lesson.challenge?.exerciseType || 'Ejercicio guiado'
+}
+
 export function DialogoVistaCurso({
   courseMeta,
   courseData,
@@ -128,7 +138,7 @@ export function DialogoVistaCurso({
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-semibold text-foam">{lesson.title}</span>
                             <span className="status-chip">{lesson.duration}</span>
-                            <span className="status-chip">{lesson.challenge.exerciseType}</span>
+                            <span className="status-chip">{getLessonExerciseType(lesson)}</span>
                           </div>
                           <p className="mt-2 text-sm text-mute">{lesson.objective}</p>
                         </div>

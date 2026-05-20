@@ -62,8 +62,9 @@ function mapFirebaseError(error) {
       return 'Hay demasiados intentos seguidos. Espera un momento antes de volver a intentar.'
     case 'auth/popup-blocked':
       return 'Tu navegador bloqueó la ventana de Google. Habilita popups para este sitio o inténtalo de nuevo.'
+    case 'auth/user-cancelled':
     case 'auth/popup-closed-by-user':
-      return 'Cerraste la ventana de Google antes de terminar el acceso.'
+      return 'Cancelaste el acceso con Google. Puedes intentarlo de nuevo cuando quieras.'
     case 'auth/cancelled-popup-request':
       return 'Ya había un intento de acceso con Google en curso. Intenta otra vez.'
     case 'auth/account-exists-with-different-credential':
@@ -75,7 +76,7 @@ function mapFirebaseError(error) {
     case 'permission-denied':
       return 'No pudimos terminar de crear tu perfil. Revisa la configuración del proyecto e intenta otra vez.'
     default:
-      return error?.message || 'No pudimos completar el acceso.'
+      return 'No pudimos completar el acceso.'
   }
 }
 

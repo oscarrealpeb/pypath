@@ -1,0 +1,159 @@
+@startuml
+title PyPath - Diagrama entidad relacion simplificado (Firebase actual)
+
+left to right direction
+hide methods
+hide stereotypes
+skinparam shadowing false
+skinparam roundcorner 12
+skinparam linetype ortho
+skinparam defaultFontName Arial
+skinparam nodesep 70
+skinparam ranksep 90
+skinparam entity {
+  BackgroundColor #F9FBFD
+  BorderColor #4977A3
+}
+skinparam note {
+  BackgroundColor #FFF8D6
+  BorderColor #C5A64A
+}
+
+entity "users/{uid}\nUSUARIO_DOC" as USER_DOC {
+  * id : string <<uid>>
+  --
+  email : string
+  name : string
+  provider : string
+  systemRole : string
+  status : string
+  emailVerified : boolean
+  goalCourseId : string?
+  onboarding : json
+  progress : json
+}
+
+entity "progress\nJSON embebido" as PROGRESS_JSON {
+  completedLessons : string[]
+  completedUnitAssessments : string[]
+  completedCourseAssessments : string[]
+}
+
+entity "emailIndex/{emailNormalized}\nINDICE_CORREO_DOC" as EMAIL_INDEX {
+  * emailNormalized : string <<docId>>
+  --
+  userId : string
+  email : string
+}
+
+entity "displayNameIndex/{nameNormalized}\nINDICE_USERNAME_DOC" as NAME_INDEX {
+  * nameNormalized : string <<docId>>
+  --
+  userId : string
+  name : string
+  email : string
+}
+
+entity "nicknameIndex/{nicknameNormalized}\nINDICE_NICKNAME_DOC" as NICK_INDEX {
+  * nicknameNormalized : string <<docId>>
+  --
+  userId : string
+  nickname : string
+}
+
+entity "platformActivity/{eventId}\nACTIVIDAD_PLATAFORMA_DOC" as ACTIVITY_DOC {
+  * id : string <<eventId>>
+  --
+  type : string
+  timestamp : timestamp
+  userId : string
+  targetUserId : string?
+  courseId : string?
+  unitId : string?
+  lessonId : string?
+  assessmentId : string?
+}
+
+entity "platform/content-cms\nCONTENIDO_CMS_DOC" as CMS_DOC {
+  * id : string = content-cms
+  --
+  updatedAt : timestamp
+  updatedBy : json
+  content : json
+}
+
+entity "CURSO_JSON\n(dentro de content.cursos[])" as COURSE_JSON {
+  * id : string
+  --
+  title : string
+  requiredCourseIds : string[]
+  units : json[]
+}
+
+USER_DOC -right- PROGRESS_JSON
+EMAIL_INDEX -right-> USER_DOC
+NAME_INDEX -right-> USER_DOC
+NICK_INDEX ..right..> USER_DOC
+
+ACTIVITY_DOC -up-> USER_DOC
+ACTIVITY_DOC ..up..> USER_DOC
+
+CMS_DOC --> COURSE_JSON : 1:N\ncontent.cursos[]
+PROGRESS_JSON ..> COURSE_JSON : N:N\nusa ids de lecciones y evaluaciones
+USER_DOC ..> COURSE_JSON : N:1\ncurso objetivo del usuario
+ACTIVITY_DOC ..> COURSE_JSON : N:1\ncurso relacionado con el evento
+
+note right of USER_DOC
+Aqui vive casi todo el estado del estudiante.
+
+onboarding guarda el diagnostico inicial.
+progress guarda listas de ids completados.
+
+Relaciones principales:
+- usuario -> progress = 1:1
+- emailIndex -> usuario = N:1
+- displayNameIndex -> usuario = N:1
+- nicknameIndex -> usuario = N:1 legado
+- actividad -> usuario actor = N:1
+- actividad -> usuario afectado = N:1 opcional
+end note
+
+note bottom of NICK_INDEX
+nicknameIndex existe por herencia del modelo anterior.
+Hoy el acceso principal gira alrededor de:
+- emailIndex
+- displayNameIndex
+end note
+
+note bottom of PROGRESS_JSON
+No existe una tabla aparte de progreso por curso.
+
+La app calcula el progreso cruzando:
+- ids completados del usuario
+- contenido del curso cargado desde content-cms
+end note
+
+note right of CMS_DOC
+El CMS real vive en un solo documento Firestore.
+
+Dentro de content se guarda:
+- cursos
+- catalogoCursos
+- evaluacionesCursos
+
+Unidades, lecciones y evaluaciones no son colecciones aparte:
+van anidadas como JSON.
+end note
+
+note bottom of COURSE_JSON
+Cada curso contiene units[].
+Dentro de cada unit se guardan lessons[].
+
+catalogoCursos define si el curso esta live, draft o soon.
+
+evaluacionesCursos guarda:
+- evaluaciones por unidad
+- evaluacion final
+end note
+
+@enduml

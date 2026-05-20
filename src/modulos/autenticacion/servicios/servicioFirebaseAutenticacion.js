@@ -4,6 +4,7 @@
   deleteUser,
   onAuthStateChanged,
   reauthenticateWithCredential,
+  reauthenticateWithPopup,
   reload,
   sendEmailVerification,
   sendPasswordResetEmail,
@@ -33,6 +34,20 @@ import {
   obtenerMensajeContrasenaMinima,
 } from './servicioValidacionAutenticacion.js'
 
+const ADMIN_PORTAL_SESSION_KEY = 'pypath-admin-portal-session'
+
+function obtenerSessionStorage() {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    return window.sessionStorage
+  } catch {
+    return null
+  }
+}
+
 function mapFirebaseError(error) {
   switch (error?.code) {
     case 'auth/email-already-in-use':
@@ -55,6 +70,8 @@ function mapFirebaseError(error) {
       return 'Ese correo ya existe con otro método de acceso. Entra primero con ese método y luego vincula Google.'
     case 'auth/network-request-failed':
       return 'No pudimos conectarnos con el servicio de acceso. Revisa tu conexión e intenta de nuevo.'
+    case 'auth/requires-recent-login':
+      return 'Por seguridad, vuelve a confirmar tu acceso antes de completar esta acción.'
     case 'permission-denied':
       return 'No pudimos terminar de crear tu perfil. Revisa la configuración del proyecto e intenta otra vez.'
     default:
@@ -67,6 +84,36 @@ function createFirebaseError(error) {
 }
 
 const GOOGLE_REDIRECT_SEED_KEY = 'pypath_google_redirect_seed'
+
+export function activarAccesoPortalAdmin() {
+  const sessionStorage = obtenerSessionStorage()
+
+  if (!sessionStorage) {
+    return
+  }
+
+  sessionStorage.setItem(ADMIN_PORTAL_SESSION_KEY, '1')
+}
+
+export function limpiarAccesoPortalAdmin() {
+  const sessionStorage = obtenerSessionStorage()
+
+  if (!sessionStorage) {
+    return
+  }
+
+  sessionStorage.removeItem(ADMIN_PORTAL_SESSION_KEY)
+}
+
+export function tieneAccesoPortalAdminActivo() {
+  const sessionStorage = obtenerSessionStorage()
+
+  if (!sessionStorage) {
+    return false
+  }
+
+  return sessionStorage.getItem(ADMIN_PORTAL_SESSION_KEY) === '1'
+}
 
 function guardarSemillaRedireccionGoogle(profileSeed) {
   if (typeof window === 'undefined' || !window.sessionStorage) {
@@ -163,7 +210,7 @@ export async function resolverEmailIngreso(identifier) {
     return normalizarCorreo(trimmedIdentifier)
   }
 
-  const owner = await buscarPerfilPorNombreVisible(trimmedIdentifier)
+  const owner = await buscarPerfilPorNombreVisible(trimmedIdentifier, { allowLegacy: true })
 
   if (!owner) {
     throw new Error(
@@ -334,9 +381,11 @@ export async function iniciarSesionConGoogle(profileSeed = {}) {
 
 export async function cerrarSesionFirebase() {
   if (!firebaseAuth) {
+    limpiarAccesoPortalAdmin()
     return
   }
 
+  limpiarAccesoPortalAdmin()
   await signOut(firebaseAuth)
 }
 
@@ -408,6 +457,62 @@ export async function actualizarContrasenaUsuarioActual({ currentPassword, nextP
     const credential = EmailAuthProvider.credential(currentUser.email, currentPassword)
     await reauthenticateWithCredential(currentUser, credential)
     await updatePassword(currentUser, nextPassword)
+  } catch (error) {
+    throw createFirebaseError(error)
+  }
+}
+
+export async function reautenticarUsuarioActualParaBorrado({ currentPassword = '' } = {}) {
+  asegurarFirebaseConfigurado()
+
+  const currentUser = firebaseAuth.currentUser
+
+  if (!currentUser) {
+    throw new Error('No hay una sesión activa para borrar la cuenta.')
+  }
+
+  const providerId = currentUser.providerData?.[0]?.providerId ?? 'password'
+
+  if (providerId === 'password') {
+    if (!currentUser.email) {
+      throw new Error('No encontramos un correo válido para confirmar el borrado.')
+    }
+
+    if (!currentPassword.trim()) {
+      throw new Error('Escribe tu contraseña actual para confirmar el borrado.')
+    }
+
+    try {
+      const credential = EmailAuthProvider.credential(currentUser.email, currentPassword)
+      await reauthenticateWithCredential(currentUser, credential)
+      return
+    } catch (error) {
+      throw createFirebaseError(error)
+    }
+  }
+
+  if (providerId === 'google.com') {
+    try {
+      await reauthenticateWithPopup(currentUser, googleAuthProvider)
+      return
+    } catch (error) {
+      throw createFirebaseError(error)
+    }
+  }
+}
+
+export async function eliminarUsuarioActualAuth() {
+  asegurarFirebaseConfigurado()
+
+  const currentUser = firebaseAuth.currentUser
+
+  if (!currentUser) {
+    throw new Error('No hay una sesión activa para borrar la cuenta.')
+  }
+
+  try {
+    await deleteUser(currentUser)
+    limpiarAccesoPortalAdmin()
   } catch (error) {
     throw createFirebaseError(error)
   }

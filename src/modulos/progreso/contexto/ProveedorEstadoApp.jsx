@@ -23,10 +23,12 @@ import {
   actualizarNombreVisibleUsuarioActual,
   cerrarSesionFirebase,
   consumirSemillaRedireccionGoogle,
+  eliminarUsuarioActualAuth,
   enviarCorreoRecuperacion,
   esUsuarioAdministrador,
   iniciarSesionConCorreoONickname,
   iniciarSesionConGoogle,
+  reautenticarUsuarioActualParaBorrado,
   refrescarUsuarioActualFirebase,
   registrarCuentaConCorreo,
   reenviarVerificacionCorreoActual,
@@ -38,6 +40,7 @@ import {
   buscarPerfilPorNickname,
   buscarPerfilPorNombreVisible,
   construirUsuarioAplicacion,
+  eliminarPerfilUsuarioYReferencias,
   guardarEstadoAprendizajeUsuario,
   guardarPerfilUsuario,
   obtenerPerfilUsuario,
@@ -1020,6 +1023,30 @@ export function ProveedorEstadoApp({ children }) {
       await cerrarSesionFirebase()
     },
 
+    async deleteCurrentUserAccount({ currentPassword = '' } = {}) {
+      if (!stateRef.current.user) {
+        throw new Error('No hay una sesión activa para borrar la cuenta.')
+      }
+
+      const currentUserProfile = {
+        ...stateRef.current.user,
+        email: stateRef.current.user.email,
+        name: stateRef.current.user.name,
+        nameNormalized: stateRef.current.user.nameNormalized,
+        nickname: stateRef.current.user.nickname ?? '',
+        nicknameNormalized: stateRef.current.user.nicknameNormalized ?? '',
+      }
+
+      await reautenticarUsuarioActualParaBorrado({ currentPassword })
+      await eliminarPerfilUsuarioYReferencias(stateRef.current.user.id, currentUserProfile)
+      await eliminarUsuarioActualAuth()
+
+      dispatch({
+        type: 'CLEAR_SESSION',
+        payload: { firebaseEnabled: stateRef.current.firebaseEnabled },
+      })
+    },
+
     async updateUserProfile(profileData) {
       if (!stateRef.current.user) {
         throw new Error('No hay una sesión activa para actualizar el perfil.')
@@ -1032,7 +1059,7 @@ export function ProveedorEstadoApp({ children }) {
           : (stateRef.current.user.nickname ?? '').trim()
 
       if (profileData.name != null && nextName) {
-        const nameOwner = await buscarPerfilPorNombreVisible(nextName)
+        const nameOwner = await buscarPerfilPorNombreVisible(nextName, { allowLegacy: true })
 
         if (nameOwner && nameOwner.id !== stateRef.current.user.id) {
           throw new Error('Ese nombre de usuario ya está en uso. Elige otro distinto.')
@@ -1055,6 +1082,9 @@ export function ProveedorEstadoApp({ children }) {
 
       const nextProfilePatch = {
         name: nextName,
+        nameAutoAssigned:
+          profileData.nameAutoAssigned ??
+          (profileData.name != null ? false : stateRef.current.user.nameAutoAssigned ?? false),
         nickname: nextNickname,
         role: profileData.role ?? stateRef.current.user.role ?? 'programadores',
         experience: profileData.experience ?? stateRef.current.user.experience ?? 'principiante',

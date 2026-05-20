@@ -1,6 +1,6 @@
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const NICKNAME_REGEX = /^[a-zA-Z0-9._-]{3,20}$/
-const DISPLAY_NAME_REGEX = /^[A-Za-zÀ-ÿ0-9._ -]{3,30}$/u
+const DISPLAY_NAME_REGEX = /^[A-Za-zÀ-ÿ0-9._-]{3,30}$/u
 
 const NICKNAME_BLACKLIST = [
   // Español
@@ -111,6 +111,10 @@ export function crearNombreCompleto(name) {
 }
 
 export function normalizarNombreVisible(value) {
+  return crearNombreCompleto(value)
+}
+
+export function normalizarNombreVisibleLegacy(value) {
   return normalizarTextoParaFiltro(crearNombreCompleto(value))
 }
 
@@ -126,7 +130,7 @@ export function validarNombreVisible(name) {
   }
 
   if (!DISPLAY_NAME_REGEX.test(trimmedName)) {
-    return 'El nombre de usuario debe tener entre 3 y 30 caracteres y usar solo letras, números, espacios, punto, guion o guion bajo.'
+    return 'El nombre de usuario debe tener entre 3 y 30 caracteres y usar solo letras, números, punto, guion o guion bajo. No se permiten espacios.'
   }
 
   if (contienePalabraProhibida(trimmedName)) {

@@ -6,6 +6,8 @@ import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { obtenerCatalogoCursos } from '../../contenido/servicios/repositorioContenido.js'
 import { BOOTSTRAP_ADMIN_EMAIL } from '../servicios/clienteFirebase.js'
 import {
+  activarAccesoPortalAdmin,
+  limpiarAccesoPortalAdmin,
   esUsuarioAdministrador,
   verificarDisponibilidadCorreo,
 } from '../servicios/servicioFirebaseAutenticacion.js'
@@ -56,6 +58,7 @@ function PasswordStrengthMeter({ password }) {
 
 const ADMIN_PORTAL_AUTH_ERROR =
   'Este correo no tiene acceso administrativo, o la contraseña es incorrecta.'
+const PUBLIC_AUTH_GENERIC_ERROR = 'No pudimos completar la autenticación.'
 
 export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAccess = false }) {
   const navigate = useNavigate()
@@ -245,16 +248,27 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
       const authenticatedUserIsAdmin = esUsuarioAdministrador(authenticatedUser)
 
       if (requireAdminAccess && !authenticatedUserIsAdmin) {
+        limpiarAccesoPortalAdmin()
         await logout()
         setError(ADMIN_PORTAL_AUTH_ERROR)
         setDebugAuthDetail('La autenticación sí ocurrió, pero la sesión resultante no quedó reconocida como admin.')
         return
       }
 
-      if (authenticatedUserIsAdmin) {
+      if (requireAdminAccess && authenticatedUserIsAdmin) {
+        activarAccesoPortalAdmin()
         navigate('/admin/contenido', { replace: true })
         return
       }
+
+      if (!requireAdminAccess && authenticatedUserIsAdmin) {
+        limpiarAccesoPortalAdmin()
+        await logout()
+        setError(PUBLIC_AUTH_GENERIC_ERROR)
+        return
+      }
+
+      limpiarAccesoPortalAdmin()
 
       if (authenticatedUser.requiresEmailVerification) {
         navigate('/verify-email', { replace: true })
@@ -275,7 +289,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
       setError(
         isAdminPortal
           ? ADMIN_PORTAL_AUTH_ERROR
-          : authError.message || 'No pudimos completar la autenticación.',
+          : authError.message || PUBLIC_AUTH_GENERIC_ERROR,
       )
     } finally {
       setIsLoading(false)
@@ -424,7 +438,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
                     className="field-input"
                     type="text"
                     name="name"
-                    placeholder="Elige un nombre de usuario único"
+                    placeholder="Elige un nombre de usuario único, sin espacios"
                     value={formState.name}
                     onChange={handleChange}
                   />

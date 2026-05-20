@@ -1,10 +1,15 @@
 ﻿import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
+  getDocs,
   onSnapshot,
+  query,
   runTransaction,
   setDoc,
+  where,
+  writeBatch,
 } from 'firebase/firestore'
 import { sanearSeleccionIntereses } from '../../../datos/opcionesPerfilUsuario.js'
 import {
@@ -24,6 +29,7 @@ import {
   normalizarCorreo,
   normalizarNickname,
   normalizarNombreVisible,
+  normalizarNombreVisibleLegacy,
   validarNickname,
 } from './servicioValidacionAutenticacion.js'
 
@@ -31,6 +37,10 @@ const USERS_COLLECTION = 'users'
 const EMAIL_INDEX_COLLECTION = 'emailIndex'
 const DISPLAY_NAME_INDEX_COLLECTION = 'displayNameIndex'
 const NICKNAME_INDEX_COLLECTION = 'nicknameIndex'
+const PLATFORM_ACTIVITY_COLLECTION = 'platformActivity'
+const AUTO_ASSIGNED_NAME_PREFIX = 'aprendiz'
+const MAX_AUTO_ASSIGNED_NAME_ATTEMPTS = 100000
+const BATCH_DELETE_LIMIT = 400
 
 function obtenerProviderId(authUser) {
   return authUser?.providerData?.[0]?.providerId ?? authUser?.providerId ?? 'password'
@@ -58,9 +68,59 @@ function obtenerNombrePerfil(authUser, currentProfile, profileSeed = {}) {
   )
 }
 
-function construirPerfilBase(authUser, currentProfile = {}, profileSeed = {}) {
+async function generarNombreVisiblePredeterminado(transaction, userId) {
+  for (let attempt = 1; attempt <= MAX_AUTO_ASSIGNED_NAME_ATTEMPTS; attempt += 1) {
+    const candidate = `${AUTO_ASSIGNED_NAME_PREFIX}${attempt}`
+    const { exact, legacy } = construirClavesNombreVisible(candidate)
+    const exactSnapshot = await transaction.get(obtenerReferenciaNombreVisible(exact))
+    const legacySnapshot =
+      legacy && legacy !== exact
+        ? await transaction.get(obtenerReferenciaNombreVisible(legacy))
+        : null
+
+    const isTakenByExactMatch =
+      (exactSnapshot?.exists() && exactSnapshot.data().userId !== userId) ||
+      (legacySnapshot?.exists() &&
+        legacySnapshot.data().userId !== userId &&
+        coincideNombreVisibleExacto(legacySnapshot.data(), candidate))
+
+    if (!isTakenByExactMatch) {
+      return candidate
+    }
+  }
+
+  throw new Error(
+    'No pudimos reservar un nombre de usuario automático en este momento. Intenta de nuevo.',
+  )
+}
+
+async function resolverNombrePerfil(transaction, authUser, currentProfile = {}, profileSeed = {}) {
+  const provider = normalizarProvider(obtenerProviderId(authUser))
+  const currentName = crearNombreCompleto(currentProfile.name ?? '')
+
+  if (provider === 'google' && !currentName) {
+    const generatedName = await generarNombreVisiblePredeterminado(transaction, authUser.uid)
+
+    return {
+      name: generatedName,
+      nameAutoAssigned: true,
+    }
+  }
+
+  return {
+    name: crearNombreCompleto(obtenerNombrePerfil(authUser, currentProfile, profileSeed)),
+    nameAutoAssigned: currentProfile.nameAutoAssigned ?? false,
+  }
+}
+
+async function construirPerfilBase(transaction, authUser, currentProfile = {}, profileSeed = {}) {
   const email = normalizarCorreo(authUser?.email ?? currentProfile.email ?? '')
-  const name = crearNombreCompleto(obtenerNombrePerfil(authUser, currentProfile, profileSeed))
+  const { name, nameAutoAssigned } = await resolverNombrePerfil(
+    transaction,
+    authUser,
+    currentProfile,
+    profileSeed,
+  )
   const nickname = (profileSeed.nickname ?? currentProfile.nickname ?? '').trim()
   const provider = normalizarProvider(obtenerProviderId(authUser))
   const createdAt = currentProfile.createdAt ?? profileSeed.createdAt ?? new Date().toISOString()
@@ -76,6 +136,7 @@ function construirPerfilBase(authUser, currentProfile = {}, profileSeed = {}) {
     email,
     name,
     nameNormalized: normalizarNombreVisible(name),
+    nameAutoAssigned,
     nickname,
     nicknameNormalized: nickname ? normalizarNickname(nickname) : '',
     photoURL: authUser.photoURL ?? currentProfile.photoURL ?? '',
@@ -116,6 +177,11 @@ function obtenerReferenciaNickname(nicknameNormalized) {
   return doc(firebaseDb, NICKNAME_INDEX_COLLECTION, nicknameNormalized)
 }
 
+function obtenerColeccionActividadPlataforma() {
+  asegurarFirebaseConfigurado()
+  return collection(firebaseDb, PLATFORM_ACTIVITY_COLLECTION)
+}
+
 function construirEstadoIndice(previousValue, nextValue, getRef) {
   return {
     previousValue,
@@ -126,17 +192,26 @@ function construirEstadoIndice(previousValue, nextValue, getRef) {
 }
 
 function construirEstadoIndices(currentProfile = {}, nextProfile = {}) {
+  const nextNameKeys = construirClavesNombreVisible(nextProfile.name ?? '')
+
   return {
     email: construirEstadoIndice(
       normalizarCorreo(currentProfile.email ?? ''),
       normalizarCorreo(nextProfile.email ?? ''),
       obtenerReferenciaCorreo,
     ),
-    name: construirEstadoIndice(
-      currentProfile.nameNormalized ?? normalizarNombreVisible(currentProfile.name ?? ''),
-      nextProfile.nameNormalized ?? normalizarNombreVisible(nextProfile.name ?? ''),
-      obtenerReferenciaNombreVisible,
-    ),
+    name: {
+      ...construirEstadoIndice(
+        currentProfile.nameNormalized ?? normalizarNombreVisible(currentProfile.name ?? ''),
+        nextProfile.nameNormalized ?? nextNameKeys.exact,
+        obtenerReferenciaNombreVisible,
+      ),
+      exactValue: nextNameKeys.exact,
+      legacyValue: nextNameKeys.legacy,
+      legacyCollisionRef: nextNameKeys.legacy
+        ? obtenerReferenciaNombreVisible(nextNameKeys.legacy)
+        : null,
+    },
     nickname: construirEstadoIndice(
       currentProfile.nicknameNormalized ?? normalizarNickname(currentProfile.nickname ?? ''),
       nextProfile.nicknameNormalized ?? normalizarNickname(nextProfile.nickname ?? ''),
@@ -147,7 +222,11 @@ function construirEstadoIndices(currentProfile = {}, nextProfile = {}) {
 
 async function leerSnapshotsIndices(transaction, indices) {
   const snapshotMap = new Map()
-  const refsToRead = [indices.name.nextRef, indices.nickname.nextRef].filter(Boolean)
+  const refsToRead = [
+    indices.name.nextRef,
+    indices.name.legacyCollisionRef,
+    indices.nickname.nextRef,
+  ].filter(Boolean)
 
   for (const ref of refsToRead) {
     if (snapshotMap.has(ref.path)) {
@@ -161,9 +240,20 @@ async function leerSnapshotsIndices(transaction, indices) {
   return snapshotMap
 }
 
-function validarIndices(userId, indices, snapshots) {
+function validarIndices(userId, indices, snapshots, nextProfile) {
   const nameSnapshot = indices.name.nextRef ? snapshots.get(indices.name.nextRef.path) : null
   if (nameSnapshot?.exists() && nameSnapshot.data().userId !== userId) {
+    throw new Error('Ese nombre de usuario ya está en uso. Elige otro distinto.')
+  }
+
+  const legacyNameSnapshot = indices.name.legacyCollisionRef
+    ? snapshots.get(indices.name.legacyCollisionRef.path)
+    : null
+  if (
+    legacyNameSnapshot?.exists() &&
+    legacyNameSnapshot.data().userId !== userId &&
+    coincideNombreVisibleExacto(legacyNameSnapshot.data(), nextProfile.name)
+  ) {
     throw new Error('Ese nombre de usuario ya está en uso. Elige otro distinto.')
   }
 
@@ -244,6 +334,7 @@ export function construirUsuarioAplicacion(authUser, profile = {}) {
     nameNormalized:
       profile.nameNormalized ??
       normalizarNombreVisible(profile.name ?? authUser?.displayName ?? ''),
+    nameAutoAssigned: profile.nameAutoAssigned ?? false,
     nickname: profile.nickname ?? '',
     nicknameNormalized: profile.nicknameNormalized ?? normalizarNickname(profile.nickname ?? ''),
     photoURL: authUser?.photoURL ?? profile.photoURL ?? '',
@@ -278,11 +369,11 @@ export async function asegurarPerfilUsuario(authUser, profileSeed = {}) {
     const userRef = obtenerReferenciaUsuario(authUser.uid)
     const userSnapshot = await transaction.get(userRef)
     const currentProfile = userSnapshot.exists() ? userSnapshot.data() : {}
-    const nextProfile = construirPerfilBase(authUser, currentProfile, profileSeed)
+    const nextProfile = await construirPerfilBase(transaction, authUser, currentProfile, profileSeed)
     const indices = construirEstadoIndices(currentProfile, nextProfile)
     const snapshots = await leerSnapshotsIndices(transaction, indices)
 
-    validarIndices(authUser.uid, indices, snapshots)
+    validarIndices(authUser.uid, indices, snapshots, nextProfile)
     aplicarIndices(transaction, authUser.uid, currentProfile, nextProfile, indices)
     transaction.set(userRef, nextProfile, { merge: true })
 
@@ -301,6 +392,9 @@ export async function guardarPerfilUsuario(userId, patch) {
         : crearNombreCompleto(currentProfile.name ?? '')
     const nextNickname =
       patch.nickname != null ? patch.nickname.trim() : (currentProfile.nickname ?? '').trim()
+    const nextNameAutoAssigned =
+      patch.nameAutoAssigned ??
+      (patch.name != null ? false : currentProfile.nameAutoAssigned ?? false)
     const nextProfile = {
       ...currentProfile,
       ...patch,
@@ -309,6 +403,7 @@ export async function guardarPerfilUsuario(userId, patch) {
         patch.name != null || patch.nameNormalized != null
           ? normalizarNombreVisible(patch.name ?? patch.nameNormalized ?? '')
           : currentProfile.nameNormalized ?? normalizarNombreVisible(currentProfile.name ?? ''),
+      nameAutoAssigned: nextNameAutoAssigned,
       nickname: nextNickname,
       nicknameNormalized:
         patch.nickname != null || patch.nicknameNormalized != null
@@ -327,7 +422,7 @@ export async function guardarPerfilUsuario(userId, patch) {
     const indices = construirEstadoIndices(currentProfile, nextProfile)
     const snapshots = await leerSnapshotsIndices(transaction, indices)
 
-    validarIndices(userId, indices, snapshots)
+    validarIndices(userId, indices, snapshots, nextProfile)
     aplicarIndices(transaction, userId, currentProfile, nextProfile, indices)
 
     transaction.set(
@@ -357,9 +452,117 @@ export async function guardarEstadoAprendizajeUsuario(userId, patch) {
   )
 }
 
-export async function buscarPerfilPorNombreVisible(name) {
+function construirClavesNombreVisible(name) {
+  const exact = normalizarNombreVisible(name)
+  const legacy = normalizarNombreVisibleLegacy(name)
+
+  return {
+    exact,
+    legacy: legacy && legacy !== exact ? legacy : '',
+  }
+}
+
+function coincideNombreVisibleExacto(profileLike = {}, expectedName = '') {
+  return crearNombreCompleto(profileLike.name ?? '') === crearNombreCompleto(expectedName)
+}
+
+async function recopilarReferenciasActividadUsuario(userId) {
+  const activityCollection = obtenerColeccionActividadPlataforma()
+  const [actorSnapshot, targetSnapshot] = await Promise.all([
+    getDocs(query(activityCollection, where('userId', '==', userId))),
+    getDocs(query(activityCollection, where('targetUserId', '==', userId))),
+  ])
+
+  const referencesByPath = new Map()
+
+  for (const snapshot of [actorSnapshot, targetSnapshot]) {
+    snapshot.docs.forEach((activityDoc) => {
+      referencesByPath.set(activityDoc.ref.path, activityDoc.ref)
+    })
+  }
+
+  return Array.from(referencesByPath.values())
+}
+
+async function eliminarReferenciasEnLotes(references = []) {
+  if (references.length === 0) {
+    return
+  }
+
+  for (let index = 0; index < references.length; index += BATCH_DELETE_LIMIT) {
+    const chunk = references.slice(index, index + BATCH_DELETE_LIMIT)
+    const batch = writeBatch(firebaseDb)
+
+    chunk.forEach((reference) => {
+      batch.delete(reference)
+    })
+
+    await batch.commit()
+  }
+}
+
+export async function eliminarPerfilUsuarioYReferencias(userId, profileSeed = null) {
   asegurarFirebaseConfigurado()
-  const nameNormalized = normalizarNombreVisible(name)
+
+  const profile = profileSeed ?? await obtenerPerfilUsuario(userId)
+  const referencesByPath = new Map()
+  const userRef = obtenerReferenciaUsuario(userId)
+
+  referencesByPath.set(userRef.path, userRef)
+
+  const emailNormalized = normalizarCorreo(profile?.email ?? '')
+  const { exact: exactNameNormalized, legacy: legacyNameNormalized } = construirClavesNombreVisible(
+    profile?.name ?? '',
+  )
+  const nameNormalized = profile?.nameNormalized ?? exactNameNormalized
+  const nicknameNormalized =
+    profile?.nicknameNormalized ?? normalizarNickname(profile?.nickname ?? '')
+
+  if (emailNormalized) {
+    const emailRef = obtenerReferenciaCorreo(emailNormalized)
+    referencesByPath.set(emailRef.path, emailRef)
+  }
+
+  if (nameNormalized) {
+    const nameRef = obtenerReferenciaNombreVisible(nameNormalized)
+    referencesByPath.set(nameRef.path, nameRef)
+  }
+
+  if (exactNameNormalized && exactNameNormalized !== nameNormalized) {
+    const exactNameRef = obtenerReferenciaNombreVisible(exactNameNormalized)
+    referencesByPath.set(exactNameRef.path, exactNameRef)
+  }
+
+  if (legacyNameNormalized && legacyNameNormalized !== nameNormalized) {
+    const legacyNameRef = obtenerReferenciaNombreVisible(legacyNameNormalized)
+    referencesByPath.set(legacyNameRef.path, legacyNameRef)
+  }
+
+  if (nicknameNormalized) {
+    const nicknameRef = obtenerReferenciaNickname(nicknameNormalized)
+    referencesByPath.set(nicknameRef.path, nicknameRef)
+  }
+
+  const activityReferences = await recopilarReferenciasActividadUsuario(userId)
+  activityReferences.forEach((reference) => {
+    referencesByPath.set(reference.path, reference)
+  })
+
+  await eliminarReferenciasEnLotes(Array.from(referencesByPath.values()))
+
+  if (!profile) {
+    try {
+      await deleteDoc(userRef)
+    } catch {
+      // Ignore: if the profile document no longer exists, the cleanup already succeeded.
+    }
+  }
+}
+
+export async function buscarPerfilPorNombreVisible(name, { allowLegacy = false } = {}) {
+  asegurarFirebaseConfigurado()
+  const expectedName = crearNombreCompleto(name)
+  const { exact: nameNormalized, legacy: legacyNameNormalized } = construirClavesNombreVisible(name)
 
   if (!nameNormalized) {
     return null
@@ -367,13 +570,29 @@ export async function buscarPerfilPorNombreVisible(name) {
 
   const snapshot = await getDoc(obtenerReferenciaNombreVisible(nameNormalized))
 
-  if (!snapshot.exists()) {
+  if (snapshot.exists()) {
+    return {
+      id: snapshot.data().userId,
+      ...snapshot.data(),
+    }
+  }
+
+  if (!allowLegacy || !legacyNameNormalized) {
+    return null
+  }
+
+  const legacySnapshot = await getDoc(obtenerReferenciaNombreVisible(legacyNameNormalized))
+
+  if (
+    !legacySnapshot.exists() ||
+    !coincideNombreVisibleExacto(legacySnapshot.data(), expectedName)
+  ) {
     return null
   }
 
   return {
-    id: snapshot.data().userId,
-    ...snapshot.data(),
+    id: legacySnapshot.data().userId,
+    ...legacySnapshot.data(),
   }
 }
 
@@ -428,7 +647,7 @@ export async function verificarDisponibilidadNombreVisible(name, currentUserId =
   }
 
   try {
-    const owner = await buscarPerfilPorNombreVisible(trimmedName)
+    const owner = await buscarPerfilPorNombreVisible(trimmedName, { allowLegacy: true })
 
     if (!owner) {
       return {

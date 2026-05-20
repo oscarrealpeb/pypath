@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Boton } from './Boton.jsx'
 import { SelectorTema } from './SelectorTema.jsx'
+import { DialogoNombreUsuarioGoogle } from '../modulos/autenticacion/componentes/DialogoNombreUsuarioGoogle.jsx'
 import { obtenerEstadisticasGamificadas } from '../modulos/progreso/selectores/selectoresProgreso.js'
 import { useAccionesApp, useEstadoApp } from '../modulos/progreso/contexto/useEstadoApp.js'
 import { combinarClases } from '../utilidades/combinarClases.js'
@@ -15,10 +17,26 @@ function obtenerClasesEnlace({ isActive }) {
 export function LayoutPlataforma() {
   const { user, progress } = useEstadoApp()
   const { logout } = useAccionesApp()
+  const [dismissedUsernameDialogKey, setDismissedUsernameDialogKey] = useState('')
   const stats = obtenerEstadisticasGamificadas(progress.completedLessons)
+  const usernameDialogKey = `${user?.id ?? 'guest'}:${user?.name ?? ''}:${
+    user?.nameAutoAssigned ? 'auto' : 'manual'
+  }`
+  const shouldPromptGoogleUsername = Boolean(
+    user?.provider === 'google' &&
+      user?.nameAutoAssigned &&
+      dismissedUsernameDialogKey !== usernameDialogKey,
+  )
 
   return (
     <div className="page-shell">
+      <DialogoNombreUsuarioGoogle
+        key={usernameDialogKey}
+        open={shouldPromptGoogleUsername}
+        user={user}
+        onClose={() => setDismissedUsernameDialogKey(usernameDialogKey)}
+      />
+
       <header className="sticky top-0 z-20 border-b border-border/70 bg-obsidian/80 backdrop-blur">
         <div className="content-width flex flex-col gap-4 py-4 xl:flex-row xl:items-center xl:gap-4">
           <div className="flex items-center gap-4 xl:min-w-0 xl:w-[18rem] xl:flex-none 2xl:w-[21rem]">
@@ -68,7 +86,7 @@ export function LayoutPlataforma() {
       </header>
 
       <main className="content-width py-10">
-        <Outlet />
+        <Outlet context={{ hasPendingProfileNamePrompt: shouldPromptGoogleUsername }} />
       </main>
     </div>
   )

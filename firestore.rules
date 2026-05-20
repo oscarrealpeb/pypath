@@ -85,12 +85,20 @@ service cloud.firestore {
         validEmailVerifiedUpdate();
     }
 
+    function isOwnActivityRecord() {
+      return isSignedIn() &&
+        (
+          resource.data.userId == request.auth.uid ||
+          resource.data.targetUserId == request.auth.uid
+        );
+    }
+
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin();
       allow list: if isAdmin();
       allow create: if isAdmin() || ownerCanCreateUser(userId);
       allow update: if isAdmin() || ownerCanUpdateUser(userId);
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || isOwner(userId);
     }
 
     match /nicknameIndex/{nicknameNormalized} {
@@ -153,7 +161,7 @@ service cloud.firestore {
     }
 
     match /platformActivity/{eventId} {
-      allow get, list: if isAdmin();
+      allow get, list: if isAdmin() || isOwnActivityRecord();
       allow create: if isSignedIn() &&
         request.resource.data.id == eventId &&
         request.resource.data.userId == request.auth.uid &&
@@ -183,7 +191,8 @@ service cloud.firestore {
             request.resource.data.actor.email == request.auth.token.email
           )
         );
-      allow update, delete: if false;
+      allow update: if false;
+      allow delete: if isAdmin() || isOwnActivityRecord();
     }
 
     match /{document=**} {

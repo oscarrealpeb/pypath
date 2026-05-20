@@ -2,6 +2,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { MensajeValidacionCampo } from '../../../componentes/MensajeValidacionCampo.jsx'
+import { Modal } from '../../../componentes/Modal.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { SelectorIntereses } from '../../../componentes/SelectorIntereses.jsx'
 import { obtenerCatalogoCursos } from '../../contenido/servicios/repositorioContenido.js'
@@ -12,13 +13,11 @@ import {
   sanearSeleccionIntereses,
 } from '../../../datos/opcionesPerfilUsuario.js'
 import {
-  verificarDisponibilidadNickname,
   verificarDisponibilidadNombreVisible,
 } from '../../autenticacion/servicios/servicioPerfilesFirebase.js'
 import {
   crearNombreCompleto,
   obtenerMensajeContrasenaMinima,
-  validarNickname,
   validarNombreVisible,
 } from '../../autenticacion/servicios/servicioValidacionAutenticacion.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
@@ -33,7 +32,6 @@ import {
 function crearEstadoFormularioPerfil(user) {
   return {
     name: user?.name ?? '',
-    nickname: user?.nickname ?? '',
     role: user?.role ?? 'programadores',
     experience: user?.experience ?? 'principiante',
     interests: sanearSeleccionIntereses(user?.interests ?? ['bases']),
@@ -45,7 +43,7 @@ function crearEstadoFormularioPerfil(user) {
 export function PaginaPerfil() {
   const navigate = useNavigate()
   const { user, progress, onboarding } = useEstadoApp()
-  const { updateUserProfile, updateCurrentUserPassword } = useAccionesApp()
+  const { updateUserProfile, updateCurrentUserPassword, deleteCurrentUserAccount } = useAccionesApp()
   const catalogoCursos = obtenerCatalogoCursos()
   const estadoFormularioUsuario = useMemo(() => crearEstadoFormularioPerfil(user), [user])
   const [formState, setFormState] = useState(() => crearEstadoFormularioPerfil(user))
@@ -63,10 +61,11 @@ export function PaginaPerfil() {
     status: 'idle',
     message: '',
   })
-  const [nicknameAvailabilityFeedback, setNicknameAvailabilityFeedback] = useState({
-    status: 'idle',
-    message: '',
-  })
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleteConfirmationText, setDeleteConfirmationText] = useState('')
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false)
 
   const profileLabels = obtenerPerfilLegible(user)
   const overallProgress = obtenerProgresoGeneral(progress)
@@ -79,6 +78,7 @@ export function PaginaPerfil() {
   const activeLibraries = courseSnapshots.filter(
     ({ course }) => course.id !== 'python-fundamentals',
   )
+  const deleteConfirmationKeyword = 'ELIMINAR'
   const goalCourse = catalogoCursos.find((course) => course.id === user?.goalCourseId)
   const routeTargetTitle = goalCourse?.title ?? recommendedStart?.courseTitle ?? 'Fundamentos de Python'
   const nameFeedback = useMemo(() => {
@@ -111,40 +111,11 @@ export function PaginaPerfil() {
 
     return nameAvailabilityFeedback
   }, [formState.name, nameAvailabilityFeedback, user?.name])
-  const nicknameFeedback = useMemo(() => {
-    const trimmedNickname = formState.nickname.trim()
-
-    if (!trimmedNickname) {
-      return {
-        status: 'idle',
-        message: 'Opcional. Puedes usarlo como alias visible dentro de tu perfil.',
-      }
-    }
-
-    const nicknameMessage = validarNickname(trimmedNickname)
-
-    if (nicknameMessage) {
-      return {
-        status: 'invalid',
-        message: nicknameMessage,
-      }
-    }
-
-    if (trimmedNickname === (user?.nickname ?? '').trim()) {
-      return {
-        status: 'owned',
-        message: 'Ese nickname ya te pertenece.',
-      }
-    }
-
-    return nicknameAvailabilityFeedback
-  }, [formState.nickname, nicknameAvailabilityFeedback, user?.nickname])
 
   useEffect(() => {
     startTransition(() => {
       setFormState(estadoFormularioUsuario)
       setNameAvailabilityFeedback({ status: 'idle', message: '' })
-      setNicknameAvailabilityFeedback({ status: 'idle', message: '' })
     })
   }, [estadoFormularioUsuario])
 
@@ -176,39 +147,6 @@ export function PaginaPerfil() {
       window.clearTimeout(timeoutId)
     }
   }, [formState.name, user?.id, user?.name])
-
-  useEffect(() => {
-    const trimmedNickname = formState.nickname.trim()
-    const nicknameMessage = validarNickname(trimmedNickname)
-
-    if (
-      !trimmedNickname ||
-      nicknameMessage ||
-      trimmedNickname === (user?.nickname ?? '').trim()
-    ) {
-      return undefined
-    }
-
-    let isCancelled = false
-
-    const timeoutId = window.setTimeout(async () => {
-      setNicknameAvailabilityFeedback({
-        status: 'checking',
-        message: 'Validando disponibilidad del nickname...',
-      })
-
-      const nextFeedback = await verificarDisponibilidadNickname(trimmedNickname, user?.id ?? '')
-
-      if (!isCancelled) {
-        setNicknameAvailabilityFeedback(nextFeedback)
-      }
-    }, 350)
-
-    return () => {
-      isCancelled = true
-      window.clearTimeout(timeoutId)
-    }
-  }, [formState.nickname, user?.id, user?.nickname])
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -271,37 +209,12 @@ export function PaginaPerfil() {
       return
     }
 
-    if (formState.nickname.trim()) {
-      const nicknameMessage = validarNickname(formState.nickname)
-
-      if (nicknameMessage) {
-        setError(nicknameMessage)
-        return
-      }
-    }
-
     const nextNameFeedback = await verificarDisponibilidadNombreVisible(formState.name, user?.id ?? '')
     setNameAvailabilityFeedback(nextNameFeedback)
 
     if (nextNameFeedback.status === 'invalid' || nextNameFeedback.status === 'taken') {
       setError(nextNameFeedback.message)
       return
-    }
-
-    if (formState.nickname.trim()) {
-      const nextNicknameFeedback = await verificarDisponibilidadNickname(
-        formState.nickname,
-        user?.id ?? '',
-      )
-      setNicknameAvailabilityFeedback(nextNicknameFeedback)
-
-      if (
-        nextNicknameFeedback.status === 'invalid' ||
-        nextNicknameFeedback.status === 'taken'
-      ) {
-        setError(nextNicknameFeedback.message)
-        return
-      }
     }
 
     if (formState.interests.length === 0 || formState.interests.length > 4) {
@@ -312,7 +225,6 @@ export function PaginaPerfil() {
     try {
       await updateUserProfile({
         name: crearNombreCompleto(formState.name),
-        nickname: formState.nickname.trim(),
         role: formState.role,
         experience: formState.experience,
         interests: formState.interests,
@@ -364,8 +276,131 @@ export function PaginaPerfil() {
     }
   }
 
+  function openDeleteDialog() {
+    setDeleteConfirmationText('')
+    setDeletePassword('')
+    setDeleteError('')
+    setShowDeleteDialog(true)
+  }
+
+  function closeDeleteDialog() {
+    if (isDeletingAccount) {
+      return
+    }
+
+    setShowDeleteDialog(false)
+    setDeleteConfirmationText('')
+    setDeletePassword('')
+    setDeleteError('')
+  }
+
+  async function handleDeleteAccount(event) {
+    event.preventDefault()
+    setDeleteError('')
+
+    if (deleteConfirmationText.trim().toUpperCase() !== deleteConfirmationKeyword) {
+      setDeleteError(`Escribe ${deleteConfirmationKeyword} para confirmar el borrado.`)
+      return
+    }
+
+    if (user?.provider === 'email' && !deletePassword.trim()) {
+      setDeleteError('Escribe tu contraseña actual para confirmar el borrado.')
+      return
+    }
+
+    try {
+      setIsDeletingAccount(true)
+      await deleteCurrentUserAccount({
+        currentPassword: deletePassword,
+      })
+      navigate('/', { replace: true })
+    } catch (deleteAccountError) {
+      setDeleteError(deleteAccountError.message || 'No pudimos borrar tu cuenta.')
+    } finally {
+      setIsDeletingAccount(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
+      <Modal open={showDeleteDialog} onClose={closeDeleteDialog} size="md">
+        <div className="space-y-6 px-6 py-6 lg:px-8">
+          <div className="space-y-3">
+            <p className="eyebrow text-red-200">Zona de peligro</p>
+            <h2 className="font-display text-3xl font-semibold text-foam">
+              Borrar cuenta permanentemente
+            </h2>
+            <p className="text-mute">
+              Esto eliminará tu perfil, tu progreso, tus índices de acceso y la actividad asociada
+              a tu cuenta en Firebase. No se puede deshacer.
+            </p>
+            <p className="text-sm text-mute">
+              Para confirmar, escribe <span className="font-semibold text-foam">{deleteConfirmationKeyword}</span>.
+              {user?.provider === 'google'
+                ? ' Luego Google te pedirá reconfirmar el acceso en una ventana emergente.'
+                : ' También te pediremos tu contraseña actual.'}
+            </p>
+          </div>
+
+          <form className="space-y-4" onSubmit={handleDeleteAccount}>
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-foam">Confirmación</span>
+              <input
+                className="field-input"
+                type="text"
+                value={deleteConfirmationText}
+                onChange={(event) => {
+                  setDeleteError('')
+                  setDeleteConfirmationText(event.target.value)
+                }}
+              />
+            </label>
+
+            {user?.provider === 'email' ? (
+              <label className="block space-y-2">
+                <span className="text-sm font-medium text-foam">Contraseña actual</span>
+                <input
+                  className="field-input"
+                  type="password"
+                  value={deletePassword}
+                  onChange={(event) => {
+                    setDeleteError('')
+                    setDeletePassword(event.target.value)
+                  }}
+                />
+              </label>
+            ) : null}
+
+            {deleteError ? (
+              <div className="rounded-2xl border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-red-100">
+                {deleteError}
+              </div>
+            ) : null}
+
+            <div className="grid gap-3">
+              <Boton
+                type="submit"
+                size="lg"
+                fullWidth
+                disabled={isDeletingAccount}
+                className="border-danger/50 bg-danger/15 text-red-100 hover:bg-danger/25 hover:text-red-50"
+              >
+                {isDeletingAccount ? 'Borrando cuenta...' : 'Sí, borrar mi cuenta'}
+              </Boton>
+              <Boton
+                type="button"
+                variant="secondary"
+                fullWidth
+                disabled={isDeletingAccount}
+                onClick={closeDeleteDialog}
+              >
+                Cancelar
+              </Boton>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
       <Tarjeta accent className="space-y-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-4">
@@ -440,7 +475,7 @@ export function PaginaPerfil() {
           <div>
             <p className="eyebrow">Editar perfil</p>
             <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
-              Ajusta nombre de usuario, nickname, rol e intereses
+              Ajusta nombre de usuario, rol e intereses
             </h2>
             <p className="mt-3 text-mute">
               Este formulario guarda tus cambios y mantiene la misma experiencia del resto de la plataforma.
@@ -454,23 +489,11 @@ export function PaginaPerfil() {
                 className="field-input"
                 type="text"
                 name="name"
+                placeholder="Sin espacios. Usa _ o - si lo necesitas"
                 value={formState.name}
                 onChange={handleChange}
               />
               <MensajeValidacionCampo feedback={nameFeedback} />
-            </label>
-
-            <label className="block space-y-2">
-              <span className="text-sm font-medium text-foam">Nickname opcional</span>
-              <input
-                className="field-input"
-                type="text"
-                name="nickname"
-                placeholder="Ejemplo: oscar.dev"
-                value={formState.nickname}
-                onChange={handleChange}
-              />
-              <MensajeValidacionCampo feedback={nicknameFeedback} />
             </label>
 
             <label className="block space-y-2">
@@ -666,6 +689,30 @@ export function PaginaPerfil() {
           </form>
         </Tarjeta>
       ) : null}
+
+      <Tarjeta className="space-y-6 border-danger/30 bg-danger/5">
+        <div>
+          <p className="eyebrow text-red-200">Zona de peligro</p>
+          <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
+            Borrar cuenta
+          </h2>
+          <p className="mt-3 text-mute">
+            Esto eliminará de Firebase tu perfil, tu progreso y la actividad relacionada con esta
+            cuenta. Es permanente.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <Boton
+            type="button"
+            variant="secondary"
+            onClick={openDeleteDialog}
+            className="border-danger/50 bg-danger/15 text-red-100 hover:bg-danger/25 hover:text-red-50"
+          >
+            Borrar mi cuenta
+          </Boton>
+        </div>
+      </Tarjeta>
 
       <section className="space-y-4">
         <div>

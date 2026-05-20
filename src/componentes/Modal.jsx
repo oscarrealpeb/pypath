@@ -6,6 +6,8 @@ const sizeClasses = {
   lg: 'max-w-4xl',
   xl: 'max-w-6xl',
 }
+let activeModalCount = 0
+let originalBodyOverflow = ''
 
 export function Modal({ open, onClose, children, size = 'lg' }) {
   useEffect(() => {
@@ -13,8 +15,12 @@ export function Modal({ open, onClose, children, size = 'lg' }) {
       return undefined
     }
 
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    if (activeModalCount === 0) {
+      originalBodyOverflow = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+    }
+
+    activeModalCount += 1
 
     function handleKeyDown(event) {
       if (event.key === 'Escape') {
@@ -24,7 +30,12 @@ export function Modal({ open, onClose, children, size = 'lg' }) {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => {
-      document.body.style.overflow = previousOverflow
+      activeModalCount = Math.max(0, activeModalCount - 1)
+
+      if (activeModalCount === 0) {
+        document.body.style.overflow = originalBodyOverflow
+      }
+
       window.removeEventListener('keydown', handleKeyDown)
     }
   }, [open, onClose])

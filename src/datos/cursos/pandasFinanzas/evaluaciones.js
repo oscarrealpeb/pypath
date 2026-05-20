@@ -104,9 +104,9 @@ export const evaluacionesPandasFinanzas = {
   },
   finalAssessment: {
     id: 'pandas-finanzas-final',
-    title: 'Evaluacion final del curso: Pandas para datos y finanzas',
+    title: 'Evaluación final del curso: Pandas para datos y finanzas',
     summary:
-      'Confirma que puedes crear, leer y transformar tablas basicas con Pandas.',
+      'Confirma que puedes crear, leer y transformar tablas básicas con Pandas.',
     passingScore: 4,
     successMessage:
       'Curso finalizado. Ya tienes una base funcional para trabajar con datos y reportes.',

@@ -8,7 +8,7 @@ export const cursoPandasFinanzas = {
   requiredCourseIds: ['python-fundamentals'],
   summary:
     'Aprende a leer datos, limpiar tablas y automatizar reportes usando estructuras que luego sirven para analisis y negocio.',
-  difficulty: 'Ideal despues de Fundamentos',
+  difficulty: 'Ideal después de Fundamentos',
   units: [
     {
       id: 'pandas-introduccion',
@@ -63,7 +63,7 @@ print(f"Versión de Pandas: {pd.__version__}")
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Instala e importa Pandas',
             prompt:
               'Completa el código para importar pandas y mostrar su versión.',
@@ -143,7 +143,7 @@ print(df)
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Crea tus primeras estructuras de datos',
             prompt:
               'Completa el código para crear una Serie de precios y un DataFrame de productos.',
@@ -260,7 +260,7 @@ print(df.describe())
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Explora un conjunto de datos',
             prompt:
               'Utiliza el archivo "ventas_mensuales.csv" mostrado en la sección de recursos para realizar una exploración completa: carga los datos, muestra el inicio, la info técnica y las estadísticas.',
@@ -386,7 +386,7 @@ print(electronica)
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Selecciona y filtra productos',
             prompt:
               'Completa el código para seleccionar productos electrónicos con precio menor a 500.',
@@ -512,7 +512,7 @@ print(df_sin_duplicados)
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Limpia un dataset de ventas',
             prompt:
               'Completa el código para limpiar un dataset con valores nulos y duplicados.',
@@ -649,7 +649,7 @@ print(df_ordenado)
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Analiza ventas y crea métricas',
             prompt:
               'Completa el código para calcular totales de venta, márgenes y categorizar productos.',
@@ -796,7 +796,7 @@ print(df[['Producto', 'Total_Anual']])
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Analiza estadísticas de un negocio',
             prompt:
               'Completa el código para calcular estadísticas de rendimiento de productos.',
@@ -945,7 +945,7 @@ print(analisis_completo)
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Analiza ventas por categorías',
             prompt:
               'Completa el código para agrupar ventas por categoría y región, calculando métricas importantes.',
@@ -1098,7 +1098,7 @@ print(fechas)
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Analiza ventas por períodos temporales',
             prompt:
               'Completa el código para analizar ventas mensuales y tendencias temporales.',
@@ -1260,7 +1260,7 @@ for accion, fecha in mejor_dia.items():
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Analiza rendimientos de un portafolio',
             prompt:
               'Completa el código para analizar rendimientos y riesgo de un portafolio de acciones.',
@@ -1425,7 +1425,7 @@ print(f"Ingreso promedio: \${ingresos['Monto'].mean():.0f}")
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Analiza el estado financiero de una empresa',
             prompt:
               'Completa el código para analizar ingresos, gastos y calcular KPIs financieros.',
@@ -1598,7 +1598,7 @@ for metrica, valor in metricas_generales.items():
           },
           challenge: {
             runtimeMode: 'python',
-            exerciseType: 'Completar codigo',
+            exerciseType: 'Completar código',
             title: 'Crea y exporta un reporte financiero completo',
             prompt:
               'Completa el código para crear un análisis completo y simular su exportación.',

@@ -3,6 +3,7 @@ import { PantallaCargandoAutenticacion } from '../componentes/PantallaCargandoAu
 import {
   esUsuarioAdministrador,
   requiereVerificacionCorreo,
+  tieneAccesoPortalAdminActivo,
 } from '../modulos/autenticacion/servicios/servicioFirebaseAutenticacion.js'
 import { useEstadoApp } from '../modulos/progreso/contexto/useEstadoApp.js'
 
@@ -18,7 +19,7 @@ export function RutaSoloPublica() {
   }
 
   if (esUsuarioAdministrador(user)) {
-    return <Navigate to="/admin/contenido" replace />
+    return <Navigate to={tieneAccesoPortalAdminActivo() ? '/admin/contenido' : '/control'} replace />
   }
 
   if (requiereVerificacionCorreo(user)) {

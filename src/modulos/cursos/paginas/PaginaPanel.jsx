@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useOutletContext } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Modal } from '../../../componentes/Modal.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
@@ -23,6 +23,7 @@ import { TarjetaCurso } from '../componentes/TarjetaCurso.jsx'
 
 export function PaginaPanel() {
   const navigate = useNavigate()
+  const { hasPendingProfileNamePrompt = false } = useOutletContext() ?? {}
   const { completeOnboarding } = useAccionesApp()
   const { user, onboarding, progress } = useEstadoApp()
   const [promptDismissed, setPromptDismissed] = useState(false)
@@ -75,7 +76,8 @@ export function PaginaPanel() {
   const goalCourse = user?.goalCourseId ? obtenerCursoCatalogoPorId(user.goalCourseId) : null
   const goalCourseIsPublished = goalCourse?.status === 'live'
   const librariesUnlocked = fundamentalsCompleted || canSkipFundamentals
-  const showDiagnosticPrompt = !onboarding.completed && !promptDismissed
+  const showDiagnosticPrompt =
+    !hasPendingProfileNamePrompt && !onboarding.completed && !promptDismissed
   const profileRecommendationPlan = construirPlanRecomendacion({
     role: user?.role,
     interests: user?.interests ?? [],

@@ -1,6 +1,9 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { PantallaCargandoAutenticacion } from '../componentes/PantallaCargandoAutenticacion.jsx'
-import { esUsuarioAdministrador } from '../modulos/autenticacion/servicios/servicioFirebaseAutenticacion.js'
+import {
+  esUsuarioAdministrador,
+  tieneAccesoPortalAdminActivo,
+} from '../modulos/autenticacion/servicios/servicioFirebaseAutenticacion.js'
 import { useEstadoApp } from '../modulos/progreso/contexto/useEstadoApp.js'
 
 export function RutaAdministrador() {
@@ -16,6 +19,10 @@ export function RutaAdministrador() {
 
   if (!esUsuarioAdministrador(user)) {
     return <Navigate to="/dashboard" replace />
+  }
+
+  if (!tieneAccesoPortalAdminActivo()) {
+    return <Navigate to="/control" replace />
   }
 
   return <Outlet />

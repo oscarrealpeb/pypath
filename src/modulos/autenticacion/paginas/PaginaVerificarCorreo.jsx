@@ -6,6 +6,7 @@ import { firebaseAuth } from '../servicios/clienteFirebase.js'
 import {
   esUsuarioAdministrador,
   requiereVerificacionCorreo,
+  tieneAccesoPortalAdminActivo,
 } from '../servicios/servicioFirebaseAutenticacion.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 
@@ -28,7 +29,7 @@ export function PaginaVerificarCorreo() {
   }
 
   if (esUsuarioAdministrador(user)) {
-    return <Navigate to="/admin/contenido" replace />
+    return <Navigate to={tieneAccesoPortalAdminActivo() ? '/admin/contenido' : '/control'} replace />
   }
 
   if (!requiereVerificacionCorreo(user)) {

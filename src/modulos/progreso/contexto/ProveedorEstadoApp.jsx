@@ -492,6 +492,7 @@ export function ProveedorEstadoApp({ children }) {
   const persistedRemoteContentRef = useRef(
     JSON.stringify(serializarContenidoPersistible(state.content)),
   )
+  const hydratingRemoteContentRef = useRef('')
   const pendingRemoteContentRef = useRef('')
   const inFlightRemoteContentRef = useRef('')
   const persistedActivityIdsRef = useRef(new Set())
@@ -660,6 +661,7 @@ export function ProveedorEstadoApp({ children }) {
   useEffect(() => {
     if (!state.firebaseEnabled) {
       contentRemoteReadyRef.current = true
+      hydratingRemoteContentRef.current = ''
       pendingRemoteContentRef.current = ''
       inFlightRemoteContentRef.current = ''
       persistedRemoteContentRef.current = JSON.stringify(
@@ -674,6 +676,7 @@ export function ProveedorEstadoApp({ children }) {
       payload: {
         status: 'loading',
         message: 'Cargando contenido del CMS desde Firestore...',
+        isReady: false,
       },
     })
 
@@ -702,6 +705,7 @@ export function ProveedorEstadoApp({ children }) {
               status: 'saved',
               message: 'Cambios del CMS sincronizados con Firestore.',
               lastSavedAt: new Date().toISOString(),
+              isReady: true,
             },
           })
         }
@@ -712,6 +716,7 @@ export function ProveedorEstadoApp({ children }) {
             payload: {
               status: 'idle',
               message: '',
+              isReady: true,
             },
           })
         }
@@ -725,6 +730,7 @@ export function ProveedorEstadoApp({ children }) {
         }
 
         if (serializedRemoteContent !== serializedCurrentContent) {
+          hydratingRemoteContentRef.current = serializedRemoteContent
           dispatch({
             type: 'SET_CONTENT',
             payload: normalizedContent,
@@ -739,6 +745,7 @@ export function ProveedorEstadoApp({ children }) {
           payload: {
             status: 'error',
             message: 'No pudimos leer el contenido remoto del CMS.',
+            isReady: true,
           },
         })
       },
@@ -839,6 +846,18 @@ export function ProveedorEstadoApp({ children }) {
   }, [state.authReady, state.firebaseEnabled, state.onboarding, state.progress, state.user])
 
   useEffect(() => {
+    if (!hydratingRemoteContentRef.current) {
+      return
+    }
+
+    const serializedContent = JSON.stringify(serializarContenidoPersistible(state.content))
+
+    if (serializedContent === hydratingRemoteContentRef.current) {
+      hydratingRemoteContentRef.current = ''
+    }
+  }, [state.content])
+
+  useEffect(() => {
     if (
       !state.firebaseEnabled ||
       !state.authReady ||
@@ -849,6 +868,10 @@ export function ProveedorEstadoApp({ children }) {
     }
 
     const serializedContent = JSON.stringify(serializarContenidoPersistible(state.content))
+
+    if (hydratingRemoteContentRef.current) {
+      return
+    }
 
     if (
       serializedContent === persistedRemoteContentRef.current &&
@@ -871,6 +894,7 @@ export function ProveedorEstadoApp({ children }) {
       payload: {
         status: 'saving',
         message: 'Guardando cambios del CMS en Firestore...',
+        isReady: true,
       },
     })
 
@@ -883,6 +907,7 @@ export function ProveedorEstadoApp({ children }) {
               status: 'saved',
               message: 'Cambios del CMS guardados. Firestore ya recibió la actualización.',
               lastSavedAt: new Date().toISOString(),
+              isReady: true,
             },
           })
         }
@@ -897,6 +922,7 @@ export function ProveedorEstadoApp({ children }) {
             payload: {
               status: 'error',
               message: 'No pudimos sincronizar el CMS con Firestore. Intenta guardar de nuevo.',
+              isReady: true,
             },
           })
         }

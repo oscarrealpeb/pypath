@@ -19,6 +19,7 @@ export function crearEstadoSincronizacionCms() {
     status: estaFirebaseConfigurado() ? 'loading' : 'idle',
     message: '',
     lastSavedAt: null,
+    isReady: !estaFirebaseConfigurado(),
   }
 }
 

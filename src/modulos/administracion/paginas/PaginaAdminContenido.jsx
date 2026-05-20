@@ -1095,7 +1095,7 @@ export function PaginaAdminContenido() {
   const selectedUnitAssessment =
     content.evaluacionesCursos[effectiveCourseId]?.unitAssessments?.[effectiveUnitId] ?? null
   const selectedFinalAssessment = content.evaluacionesCursos[effectiveCourseId]?.finalAssessment ?? null
-  const isHydratingCms = cmsSync.status === 'loading'
+  const isHydratingCms = cmsSync.isReady === false
   const isSyncingCms = cmsSync.status === 'saving' || isHydratingCms
   const isTransitioningToDraft = pendingCourseAction === 'unpublish'
   const isCourseEditable = selectedMeta?.status === 'draft' && !isTransitioningToDraft

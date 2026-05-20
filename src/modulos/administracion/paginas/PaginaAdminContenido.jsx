@@ -176,6 +176,10 @@ function CourseEditor({
   const [draft, setDraft] = useState(() => construirBorradorCurso(course, meta))
   const publicationLabel = meta.statusLabel?.trim() || 'Sin estado'
 
+  useEffect(() => {
+    setDraft(construirBorradorCurso(course, meta))
+  }, [course, meta])
+
   return (
     <Tarjeta className="space-y-5">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -557,6 +561,10 @@ function LessonEditor({
   const visibleRuntimeMode = supportsPythonRuntime ? draft.runtimeMode : 'guided'
   const usesMultipleChallenges = draft.usesMultipleChallenges
 
+  useEffect(() => {
+    setDraft(construirBorradorLeccion(lesson))
+  }, [lesson])
+
   function setDraftField(field, value) {
     setDraft((current) => ({ ...current, [field]: value }))
   }
@@ -932,6 +940,10 @@ function LessonEditor({
 
 function FinalAssessmentEditor({ assessment, isEditable, isSyncing, onSave }) {
   const [draft, setDraft] = useState(() => construirBorradorEvaluacion(assessment))
+
+  useEffect(() => {
+    setDraft(construirBorradorEvaluacion(assessment))
+  }, [assessment])
 
   return (
     <Tarjeta className="space-y-5">

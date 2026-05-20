@@ -4,9 +4,9 @@ export const catalogoPythonCiberseguridad = {
   requiredCourseIds: ['python-fundamentals'],
   title: 'Python aplicado a ciberseguridad',
   description:
-    'Aprende hashing, autenticidad, red, HTTP y análisis de logs con Python dentro de laboratorios guiados y éticos.',
-  status: 'soon',
-  statusLabel: 'En preparación',
+    'Aprende hashing, cifrado, tráfico, scripts de auditoría y análisis de logs con Python dentro de laboratorios guiados, éticos y bien acotados.',
+  status: 'live',
+  statusLabel: 'Disponible ahora',
   intensity: 'Alta',
   duration: '6 semanas',
   audience: ['Ciberseguridad', 'Programadores', 'Automatización'],
@@ -17,6 +17,6 @@ export const catalogoPythonCiberseguridad = {
   interestTags: ['ciberseguridad', 'automatizacion'],
   experienceTags: ['intermedio', 'avanzado'],
   pitch:
-    'Una ruta técnica y entendible para usar Python en tareas reales de seguridad sin convertir el curso en una caricatura de “hacker”.',
+    'Una ruta técnica, ética y entendible para usar Python en integridad, autenticidad, tráfico, auditoría y detección sin volver el curso una caricatura de “hacker”.',
   recommendedOrder: 4,
 }

@@ -132,3 +132,37 @@ En esta fase:
 - la cuenta no se borra automáticamente
 
 No estamos usando limpieza automática de cuentas no verificadas porque eso nos llevaría a servicios adicionales que por ahora no hacen falta para pruebas.
+
+## 8. Limpieza manual de cuentas no verificadas
+
+Si necesitas limpiar cuentas `email/password` que nunca confirmaron el correo y ya superaron cierto tiempo, el proyecto incluye un script manual:
+
+```bash
+npm run cleanup:unverified-users -- --service-account "C:\\ruta\\firebase-admin.json" --hours 24 --dry-run
+```
+
+Ese primer comando:
+
+- no borra nada
+- revisa Firebase Auth
+- muestra qué cuentas candidatas eliminaría
+
+Si el resultado se ve correcto, puedes ejecutar la limpieza real:
+
+```bash
+npm run cleanup:unverified-users -- --service-account "C:\\ruta\\firebase-admin.json" --hours 24
+```
+
+El script:
+
+- excluye `admin@pypath.com`
+- excluye cuentas Google o cuentas con proveedores mezclados
+- borra `users/{uid}`
+- borra `emailIndex`, `displayNameIndex` y `nicknameIndex` relacionados
+- borra actividad relacionada en `platformActivity`
+- al final borra la cuenta en Firebase Auth
+
+Recomendación práctica:
+
+- úsalo primero con `--dry-run`
+- luego ejecútalo real una vez al día o cuando quieras hacer mantenimiento

@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "verify:admin-content": "node scripts/verify-admin-content-flow.mjs",
     "inspect:cms-backup": "node scripts/inspect-content-backup.mjs",
-    "restore:cms-backup": "node scripts/restore-content-cms.mjs"
+    "restore:cms-backup": "node scripts/restore-content-cms.mjs",
+    "cleanup:unverified-users": "node scripts/cleanup-unverified-users.mjs"
   },
   "dependencies": {
     "@codemirror/lang-python": "^6.2.1",

@@ -270,13 +270,67 @@ export function serializarContenidoPersistible(content) {
   }
 }
 
+function extraerContenidoRaizLegado(snapshotData) {
+  if (!snapshotData || typeof snapshotData !== 'object') {
+    return null
+  }
+
+  const hasLegacyFields =
+    Array.isArray(snapshotData.cursos) ||
+    Array.isArray(snapshotData.catalogoCursos) ||
+    (snapshotData.evaluacionesCursos && typeof snapshotData.evaluacionesCursos === 'object')
+
+  if (!hasLegacyFields) {
+    return null
+  }
+
+  return {
+    cursos: snapshotData.cursos,
+    catalogoCursos: snapshotData.catalogoCursos,
+    evaluacionesCursos: snapshotData.evaluacionesCursos,
+    cursosGestionadosCms: snapshotData.cursosGestionadosCms,
+    catalogosGestionadosCms: snapshotData.catalogosGestionadosCms,
+    evaluacionesGestionadasCms: snapshotData.evaluacionesGestionadasCms,
+    cursosEliminadosCms: snapshotData.cursosEliminadosCms,
+  }
+}
+
+function medirContenidoPersistido(content) {
+  if (!content) {
+    return 0
+  }
+
+  try {
+    return JSON.stringify(serializarContenidoPersistible(content)).length
+  } catch {
+    return 0
+  }
+}
+
+function resolverContenidoRemoto(snapshotData) {
+  const nestedContent = snapshotData?.content ?? null
+  const legacyRootContent = extraerContenidoRaizLegado(snapshotData)
+
+  if (!nestedContent) {
+    return legacyRootContent
+  }
+
+  if (!legacyRootContent) {
+    return nestedContent
+  }
+
+  return medirContenidoPersistido(legacyRootContent) > medirContenidoPersistido(nestedContent)
+    ? legacyRootContent
+    : nestedContent
+}
+
 export function suscribirContenidoCms(onContentChange, onError) {
   const reference = obtenerReferenciaContenido()
 
   return onSnapshot(
     reference,
     (snapshot) => {
-      const remoteContent = snapshot.data()?.content ?? null
+      const remoteContent = resolverContenidoRemoto(snapshot.data() ?? null)
       onContentChange(normalizarContenidoPersistido(remoteContent))
     },
     onError,

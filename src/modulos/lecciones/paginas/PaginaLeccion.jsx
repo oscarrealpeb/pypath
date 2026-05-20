@@ -252,9 +252,6 @@ function PanelVideoApoyo({ resources, lessonTitle }) {
     <div className="space-y-4">
       <div>
         <p className="text-base font-medium text-foam">{resources.videoTitle || 'Video de apoyo'}</p>
-        <p className="mt-2 text-sm leading-7 text-mute">
-          Usa el video solo cuando aporte contexto real. Si la lección funciona mejor con capturas y texto, también está bien.
-        </p>
       </div>
 
       <div className="overflow-hidden rounded-2xl border border-border/80 bg-black">
@@ -485,6 +482,10 @@ export function PaginaLeccion() {
   const hasSupportVideo = supportItems.some((item) => item.type === 'video')
   const hasSupportDocumentation = supportItems.some((item) => item.type === 'documentation')
   const hasSupportExample = supportItems.some((item) => item.type === 'example')
+  const rawOverview = record.lesson.instructions.overview ?? ''
+  const theoryPrefix = /^teor[ií]a:\s*/i
+  const overviewLabel = theoryPrefix.test(rawOverview) ? 'Teoría' : 'Contexto'
+  const overviewText = rawOverview.replace(theoryPrefix, '')
   const missionLabel = obtenerEtiquetaVisibleLeccion(record.unitIndex, record.lessonIndexInUnit)
   const visibleLessonTitle = obtenerTituloVisibleLeccion(
     record.lesson,
@@ -527,8 +528,8 @@ export function PaginaLeccion() {
         </div>
 
         <div>
-          <p className="text-xs uppercase tracking-[0.22em] text-mute">Brief</p>
-          <p className="mt-3 text-mute">{record.lesson.instructions.overview}</p>
+          <p className="text-xs uppercase tracking-[0.22em] text-mute">{overviewLabel}</p>
+          <p className="mt-3 text-mute">{overviewText}</p>
         </div>
 
         <BarraProgreso

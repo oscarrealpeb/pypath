@@ -2,7 +2,10 @@ import { useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
-import { obtenerCatalogoCursos } from '../../contenido/servicios/repositorioContenido.js'
+import {
+  cursoEstaPublicado,
+  obtenerCursoCatalogoPorId,
+} from '../../contenido/servicios/repositorioContenido.js'
 import {
   obtenerRutaEvaluacionDesdePaso,
   obtenerRegistroEvaluacionFinal,
@@ -90,9 +93,8 @@ export function PaginaCurso() {
     ...progress,
     assessmentResult: onboarding.assessmentResult,
   }
-  const catalogoCursos = obtenerCatalogoCursos()
   const course = obtenerCursoPorId(id)
-  const courseMeta = catalogoCursos.find((item) => item.id === id)
+  const courseMeta = obtenerCursoCatalogoPorId(id)
 
   if (!course) {
     return (
@@ -101,6 +103,22 @@ export function PaginaCurso() {
         <h1 className="mt-5 font-display text-3xl font-semibold text-foam">
           El curso solicitado no existe
         </h1>
+      </Tarjeta>
+    )
+  }
+
+  if (!cursoEstaPublicado(id)) {
+    return (
+      <Tarjeta className="space-y-5 text-center">
+        <p className="eyebrow">Curso en preparación</p>
+        <h1 className="font-display text-3xl font-semibold text-foam">
+          Este curso todavía no está disponible para estudiantes
+        </h1>
+        <p className="text-mute">
+          El contenido existe en el CMS, pero solo se habilita aquí cuando el curso queda
+          publicado.
+        </p>
+        <Boton onClick={() => navigate('/dashboard')}>Volver al panel</Boton>
       </Tarjeta>
     )
   }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
+import { cursoEstaPublicado } from '../../contenido/servicios/repositorioContenido.js'
 import {
   obtenerRutaEvaluacionDesdePaso,
   obtenerRegistroEvaluacionFinal,
@@ -88,6 +89,21 @@ export function PaginaEvaluacion({ mode = 'unit' }) {
         <h1 className="mt-5 font-display text-3xl font-semibold text-foam">
           No pudimos encontrar esta evaluación
         </h1>
+      </Tarjeta>
+    )
+  }
+
+  if (!cursoEstaPublicado(courseId)) {
+    return (
+      <Tarjeta className="space-y-5 text-center">
+        <p className="eyebrow">Evaluación no disponible</p>
+        <h1 className="font-display text-3xl font-semibold text-foam">
+          Este curso sigue en preparación
+        </h1>
+        <p className="text-mute">
+          Las evaluaciones solo se habilitan para estudiantes cuando el curso queda publicado.
+        </p>
+        <Boton onClick={() => navigate('/dashboard')}>Volver al panel</Boton>
       </Tarjeta>
     )
   }
@@ -288,4 +304,3 @@ export function PaginaEvaluacion({ mode = 'unit' }) {
     </div>
   )
 }
-

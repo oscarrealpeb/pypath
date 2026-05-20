@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { LayoutAdministracion } from '../componentes/LayoutAdministracion.jsx'
 import { LayoutPlataforma } from '../componentes/LayoutPlataforma.jsx'
 import { PaginaAdminContenido } from '../modulos/administracion/paginas/PaginaAdminContenido.jsx'
@@ -16,6 +16,7 @@ import { PaginaLeccion } from '../modulos/lecciones/paginas/PaginaLeccion.jsx'
 import { PaginaDiagnostico } from '../modulos/diagnostico/paginas/PaginaDiagnostico.jsx'
 import { PaginaPerfil } from '../modulos/perfil/paginas/PaginaPerfil.jsx'
 import { RutaAdministrador } from './RutaAdministrador.jsx'
+import { RutaPortalAdmin } from './RutaPortalAdmin.jsx'
 import { RutaProtegida } from './RutaProtegida.jsx'
 import { RutaSoloPublica } from './RutaSoloPublica.jsx'
 import { RutaEstudiante } from './RutaEstudiante.jsx'
@@ -43,6 +44,9 @@ export function RutasApp() {
         <Route path="/login" element={<PaginaAutenticacion mode="login" />} />
         <Route path="/register" element={<PaginaAutenticacion mode="register" />} />
         <Route path="/forgot-password" element={<PaginaRecuperarContrasena />} />
+      </Route>
+
+      <Route element={<RutaPortalAdmin />}>
         <Route
           path="/control"
           element={<PaginaAutenticacion mode="login" portal="admin" requireAdminAccess />}
@@ -55,8 +59,9 @@ export function RutasApp() {
 
       <Route element={<RutaAdministrador />}>
         <Route element={<LayoutAdministracion />}>
-          <Route path="/admin" element={<PaginaAdminInicio />} />
+          <Route path="/admin" element={<Navigate to="/admin/contenido" replace />} />
           <Route path="/admin/contenido" element={<PaginaAdminContenido />} />
+          <Route path="/admin/resumen" element={<PaginaAdminInicio />} />
           <Route path="/admin/usuarios" element={<PaginaAdminUsuarios />} />
           <Route path="/admin/metricas" element={<PaginaAdminMetricas />} />
         </Route>

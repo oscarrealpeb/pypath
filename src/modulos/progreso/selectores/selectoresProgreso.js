@@ -1,4 +1,7 @@
-import { obtenerCursos } from '../../contenido/servicios/repositorioContenido.js'
+import {
+  cursoEstaPublicado,
+  obtenerCursos,
+} from '../../contenido/servicios/repositorioContenido.js'
 import {
   obtenerRutaEvaluacionDesdePaso,
   obtenerRegistroEvaluacionFinal,
@@ -305,6 +308,11 @@ export function obtenerInicioRecomendado(courseId, assessmentResult) {
   }
 
   const resolvedCourseId = courseId ?? assessmentResult.recommendedCourseId
+
+  if (!cursoEstaPublicado(resolvedCourseId)) {
+    return null
+  }
+
   const course = obtenerCursoPorId(resolvedCourseId)
   const unit = course?.units.find((item) => item.id === assessmentResult.recommendedUnitId)
   const lesson = unit?.lessons.find((item) => item.id === assessmentResult.recommendedLessonId)

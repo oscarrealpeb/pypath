@@ -10,7 +10,8 @@ export function PaginaAdminInicio() {
   const metrics = obtenerMetricasAdmin(users, userStates, activity)
   const totalUnits = content.cursos.reduce((sum, course) => sum + course.units.length, 0)
   const totalLessons = content.cursos.reduce(
-    (sum, course) => sum + course.units.reduce((innerSum, unit) => innerSum + unit.lessons.length, 0),
+    (sum, course) =>
+      sum + course.units.reduce((innerSum, unit) => innerSum + unit.lessons.length, 0),
     0,
   )
 
@@ -87,7 +88,8 @@ export function PaginaAdminInicio() {
             Resumen rápido del uso
           </h2>
           <p className="text-mute">
-            Consulta usuarios activos, cursos con más tracción y eventos recientes de la plataforma.
+            Consulta usuarios activos, cuentas deshabilitadas, cursos con más tracción y
+            actividad sincronizada de la plataforma.
           </p>
           <Boton variant="secondary" onClick={() => navigate('/admin/metricas')}>
             Ir a métricas

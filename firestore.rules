@@ -32,6 +32,40 @@ service cloud.firestore {
         request.resource.data.emailVerified == resource.data.emailVerified;
     }
 
+    function userProfileAfter(userId) {
+      return getAfter(/databases/$(database)/documents/users/$(userId));
+    }
+
+    function validNicknameIndexWrite(nicknameNormalized, userId) {
+      let nextProfile = userProfileAfter(userId).data;
+      return request.resource.data.userId == userId &&
+        request.resource.data.nicknameNormalized == nicknameNormalized &&
+        request.resource.data.nickname is string &&
+        request.resource.data.email == nextProfile.email &&
+        request.resource.data.emailNormalized == nextProfile.email &&
+        request.resource.data.nickname == nextProfile.nickname &&
+        nextProfile.nicknameNormalized == nicknameNormalized;
+    }
+
+    function validEmailIndexWrite(emailNormalized, userId) {
+      let nextProfile = userProfileAfter(userId).data;
+      return request.resource.data.userId == userId &&
+        request.resource.data.email == nextProfile.email &&
+        request.resource.data.emailNormalized == emailNormalized &&
+        nextProfile.email == emailNormalized;
+    }
+
+    function validDisplayNameIndexWrite(nameNormalized, userId) {
+      let nextProfile = userProfileAfter(userId).data;
+      return request.resource.data.userId == userId &&
+        request.resource.data.nameNormalized == nameNormalized &&
+        request.resource.data.name is string &&
+        request.resource.data.email == nextProfile.email &&
+        request.resource.data.emailNormalized == nextProfile.email &&
+        request.resource.data.name == nextProfile.name &&
+        nextProfile.nameNormalized == nameNormalized;
+    }
+
     function ownerCanCreateUser(userId) {
       return isOwner(userId) &&
         validUserIdentity(userId) &&
@@ -63,27 +97,33 @@ service cloud.firestore {
       allow get: if isSignedIn();
       allow list: if false;
       allow create: if isAdmin() ||
-        (isSignedIn() && request.resource.data.userId == request.auth.uid);
+        (
+          isSignedIn() &&
+          validNicknameIndexWrite(nicknameNormalized, request.auth.uid)
+        );
       allow update: if isAdmin() ||
         (
           isSignedIn() &&
           resource.data.userId == request.auth.uid &&
-          request.resource.data.userId == request.auth.uid
+          validNicknameIndexWrite(nicknameNormalized, request.auth.uid)
         );
       allow delete: if isAdmin() ||
         (isSignedIn() && resource.data.userId == request.auth.uid);
     }
 
     match /emailIndex/{emailNormalized} {
-      allow get: if true;
+      allow get: if isAdmin();
       allow list: if false;
       allow create: if isAdmin() ||
-        (isSignedIn() && request.resource.data.userId == request.auth.uid);
+        (
+          isSignedIn() &&
+          validEmailIndexWrite(emailNormalized, request.auth.uid)
+        );
       allow update: if isAdmin() ||
         (
           isSignedIn() &&
           resource.data.userId == request.auth.uid &&
-          request.resource.data.userId == request.auth.uid
+          validEmailIndexWrite(emailNormalized, request.auth.uid)
         );
       allow delete: if isAdmin() ||
         (isSignedIn() && resource.data.userId == request.auth.uid);
@@ -93,12 +133,15 @@ service cloud.firestore {
       allow get: if true;
       allow list: if false;
       allow create: if isAdmin() ||
-        (isSignedIn() && request.resource.data.userId == request.auth.uid);
+        (
+          isSignedIn() &&
+          validDisplayNameIndexWrite(nameNormalized, request.auth.uid)
+        );
       allow update: if isAdmin() ||
         (
           isSignedIn() &&
           resource.data.userId == request.auth.uid &&
-          request.resource.data.userId == request.auth.uid
+          validDisplayNameIndexWrite(nameNormalized, request.auth.uid)
         );
       allow delete: if isAdmin() ||
         (isSignedIn() && resource.data.userId == request.auth.uid);
@@ -107,6 +150,40 @@ service cloud.firestore {
     match /platform/content-cms {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    match /platformActivity/{eventId} {
+      allow get, list: if isAdmin();
+      allow create: if isSignedIn() &&
+        request.resource.data.id == eventId &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.type is string &&
+        request.resource.data.timestamp == request.time &&
+        request.resource.data.keys().hasAll(['id', 'type', 'timestamp', 'userId']) &&
+        request.resource.data.keys().hasOnly([
+          'id',
+          'type',
+          'timestamp',
+          'userId',
+          'targetUserId',
+          'courseId',
+          'unitId',
+          'lessonId',
+          'assessmentId',
+          'recommendedCourseId',
+          'status',
+          'systemRole',
+          'provider',
+          'actor',
+        ]) &&
+        (
+          request.resource.data.actor == null ||
+          (
+            request.resource.data.actor.id == request.auth.uid &&
+            request.resource.data.actor.email == request.auth.token.email
+          )
+        );
+      allow update, delete: if false;
     }
 
     match /{document=**} {

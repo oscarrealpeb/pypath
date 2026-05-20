@@ -1,9 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
-import { esCorreoAdminPrivilegiado, firebaseAuth } from '../servicios/clienteFirebase.js'
-import { requiereVerificacionCorreo } from '../servicios/servicioFirebaseAutenticacion.js'
+import { firebaseAuth } from '../servicios/clienteFirebase.js'
+import {
+  esUsuarioAdministrador,
+  requiereVerificacionCorreo,
+} from '../servicios/servicioFirebaseAutenticacion.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 
 export function PaginaVerificarCorreo() {
@@ -20,49 +23,12 @@ export function PaginaVerificarCorreo() {
   const [successMessage, setSuccessMessage] = useState('')
   const resolvedSessionEmail = user?.email ?? firebaseAuth?.currentUser?.email ?? ''
 
-  useEffect(() => {
-    let isMounted = true
-
-    async function resolverAccesoAdmin() {
-      if (!user) {
-        return
-      }
-
-      if (esCorreoAdminPrivilegiado(resolvedSessionEmail)) {
-        navigate('/admin', { replace: true })
-        return
-      }
-
-      if (!resolvedSessionEmail && firebaseAuth?.currentUser) {
-        try {
-          const refreshedUser = await refreshAuthenticatedSession()
-
-          if (
-            isMounted &&
-            refreshedUser &&
-            esCorreoAdminPrivilegiado(refreshedUser.email)
-          ) {
-            navigate('/admin', { replace: true })
-          }
-        } catch {
-          // If the refresh fails, the regular fallback UI can still guide the session.
-        }
-      }
-    }
-
-    resolverAccesoAdmin()
-
-    return () => {
-      isMounted = false
-    }
-  }, [navigate, refreshAuthenticatedSession, resolvedSessionEmail, user])
-
   if (!user) {
     return <Navigate to="/login" replace />
   }
 
-  if (esCorreoAdminPrivilegiado(resolvedSessionEmail)) {
-    return <Navigate to="/admin" replace />
+  if (esUsuarioAdministrador(user)) {
+    return <Navigate to="/admin/contenido" replace />
   }
 
   if (!requiereVerificacionCorreo(user)) {

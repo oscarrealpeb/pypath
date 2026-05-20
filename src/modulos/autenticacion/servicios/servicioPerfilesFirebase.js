@@ -1,4 +1,4 @@
-import {
+﻿import {
   collection,
   doc,
   getDoc,
@@ -24,6 +24,7 @@ import {
   normalizarCorreo,
   normalizarNickname,
   normalizarNombreVisible,
+  validarNickname,
 } from './servicioValidacionAutenticacion.js'
 
 const USERS_COLLECTION = 'users'
@@ -41,11 +42,17 @@ function normalizarProvider(providerId) {
 
 function obtenerNombrePerfil(authUser, currentProfile, profileSeed = {}) {
   const fallbackEmail = normalizarCorreo(authUser?.email ?? currentProfile?.email ?? '')
+  const fallbackUid = (authUser?.uid ?? currentProfile?.id ?? '').toString().slice(0, 6).toLowerCase()
+  const bootstrapAdminName =
+    esCorreoAdminPrivilegiado(fallbackEmail) && fallbackUid
+      ? `admin.${fallbackUid}`
+      : ''
 
   return (
     profileSeed.name?.trim() ||
     currentProfile?.name ||
     authUser?.displayName ||
+    bootstrapAdminName ||
     fallbackEmail.split('@')[0] ||
     'Operador'
   )
@@ -140,9 +147,7 @@ function construirEstadoIndices(currentProfile = {}, nextProfile = {}) {
 
 async function leerSnapshotsIndices(transaction, indices) {
   const snapshotMap = new Map()
-  const refsToRead = [indices.email.nextRef, indices.name.nextRef, indices.nickname.nextRef].filter(
-    Boolean,
-  )
+  const refsToRead = [indices.name.nextRef, indices.nickname.nextRef].filter(Boolean)
 
   for (const ref of refsToRead) {
     if (snapshotMap.has(ref.path)) {
@@ -157,11 +162,6 @@ async function leerSnapshotsIndices(transaction, indices) {
 }
 
 function validarIndices(userId, indices, snapshots) {
-  const emailSnapshot = indices.email.nextRef ? snapshots.get(indices.email.nextRef.path) : null
-  if (emailSnapshot?.exists() && emailSnapshot.data().userId !== userId) {
-    throw new Error('Ese correo ya está registrado. Usa otro o inicia sesión.')
-  }
-
   const nameSnapshot = indices.name.nextRef ? snapshots.get(indices.name.nextRef.path) : null
   if (nameSnapshot?.exists() && nameSnapshot.data().userId !== userId) {
     throw new Error('Ese nombre de usuario ya está en uso. Elige otro distinto.')
@@ -211,6 +211,8 @@ function aplicarIndices(transaction, userId, currentProfile, nextProfile, indice
       indices.nickname.nextRef,
       {
         userId,
+        email: normalizarCorreo(nextProfile.email ?? ''),
+        emailNormalized: normalizarCorreo(nextProfile.email ?? ''),
         nickname: (nextProfile.nickname ?? '').trim(),
         nicknameNormalized: indices.nickname.nextValue,
         updatedAt: now,
@@ -447,6 +449,13 @@ export async function verificarDisponibilidadNombreVisible(name, currentUserId =
       message: 'Ese nombre de usuario ya está en uso. Elige otro distinto.',
     }
   } catch {
+    if (!currentUserId) {
+      return {
+        status: 'unknown',
+        message: 'Comprobaremos la disponibilidad del nombre al crear la cuenta.',
+      }
+    }
+
     return {
       status: 'unknown',
       message:
@@ -462,6 +471,15 @@ export async function verificarDisponibilidadNickname(nickname, currentUserId = 
     return {
       status: 'invalid',
       message: 'Elige un nickname para tu cuenta.',
+    }
+  }
+
+  const nicknameMessage = validarNickname(trimmedNickname)
+
+  if (nicknameMessage) {
+    return {
+      status: 'invalid',
+      message: nicknameMessage,
     }
   }
 
@@ -522,3 +540,4 @@ export function suscribirPerfilesUsuarios(onChange, onError) {
     onError,
   )
 }
+

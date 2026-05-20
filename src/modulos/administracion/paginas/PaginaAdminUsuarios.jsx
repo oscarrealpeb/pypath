@@ -1,15 +1,24 @@
-﻿import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { esCorreoAdminPrivilegiado } from '../../autenticacion/servicios/clienteFirebase.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 import { obtenerMetricasAdmin, obtenerResumenUsuario } from '../selectores/selectoresAdmin.js'
 
+function obtenerMensajeError(error, fallback) {
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  return fallback
+}
+
 export function PaginaAdminUsuarios() {
   const { users, userStates, activity, user: currentUser } = useEstadoApp()
   const { requestPasswordReset, setSystemRole, toggleUserStatus } = useAccionesApp()
   const [query, setQuery] = useState('')
   const [feedback, setFeedback] = useState('')
+  const [pendingAction, setPendingAction] = useState('')
   const metrics = obtenerMetricasAdmin(users, userStates, activity)
 
   const visibleUsers = useMemo(() => {
@@ -27,35 +36,36 @@ export function PaginaAdminUsuarios() {
     })
   }, [query, users])
 
-  async function handleToggleRole(user) {
-    try {
-      await setSystemRole(user.id, user.systemRole === 'admin' ? 'student' : 'admin')
-      setFeedback('Rol de usuario actualizado.')
-    } catch (error) {
-      setFeedback(error.message)
-    }
+  function isBusy(actionKey) {
+    return pendingAction === actionKey
   }
 
-  async function handleToggleStatus(userId) {
-    try {
-      await toggleUserStatus(userId)
-      setFeedback('Estado de usuario actualizado.')
-    } catch (error) {
-      setFeedback(error.message)
+  function getRoleRestriction(user) {
+    if (esCorreoAdminPrivilegiado(user.email)) {
+      return 'La cuenta admin fija conserva su rol base y no se edita desde este panel.'
     }
+
+    if (currentUser?.id === user.id) {
+      return 'No puedes cambiar tu propio rol desde esta sesión.'
+    }
+
+    return ''
   }
 
-  async function handlePasswordReset(userId) {
-    try {
-      await requestPasswordReset(userId)
-      setFeedback('Correo de recuperación enviado a esa cuenta.')
-    } catch (error) {
-      setFeedback(error.message)
+  function getStatusRestriction(user) {
+    if (esCorreoAdminPrivilegiado(user.email)) {
+      return 'La cuenta admin fija no se deshabilita desde este panel.'
     }
+
+    if (currentUser?.id === user.id) {
+      return 'No puedes deshabilitar tu propia cuenta desde esta sesión.'
+    }
+
+    return ''
   }
 
-  function getResetRestriction(user, canEdit) {
-    if (!canEdit) {
+  function getResetRestriction(user) {
+    if (currentUser?.id === user.id) {
       return 'No puedes reiniciar la contraseña de tu propia sesión desde este panel.'
     }
 
@@ -70,6 +80,84 @@ export function PaginaAdminUsuarios() {
     return ''
   }
 
+  async function handleRoleToggle(user) {
+    const restriction = getRoleRestriction(user)
+    if (restriction) {
+      setFeedback(restriction)
+      return
+    }
+
+    const nextRole = user.systemRole === 'admin' ? 'student' : 'admin'
+    const actionKey = `role:${user.id}`
+
+    setPendingAction(actionKey)
+    setFeedback('')
+
+    try {
+      await setSystemRole(user.id, nextRole)
+      setFeedback(
+        nextRole === 'admin'
+          ? `Ahora ${user.name} tiene acceso administrativo.`
+          : `Ahora ${user.name} vuelve a tener rol de estudiante.`,
+      )
+    } catch (error) {
+      setFeedback(obtenerMensajeError(error, 'No pudimos actualizar el rol de esa cuenta.'))
+    } finally {
+      setPendingAction('')
+    }
+  }
+
+  async function handleStatusToggle(user) {
+    const restriction = getStatusRestriction(user)
+    if (restriction) {
+      setFeedback(restriction)
+      return
+    }
+
+    const willDisable = user.status !== 'disabled'
+    const actionKey = `status:${user.id}`
+
+    setPendingAction(actionKey)
+    setFeedback('')
+
+    try {
+      await toggleUserStatus(user.id)
+      setFeedback(
+        willDisable
+          ? `La cuenta de ${user.name} quedó deshabilitada.`
+          : `La cuenta de ${user.name} volvió a quedar activa.`,
+      )
+    } catch (error) {
+      setFeedback(obtenerMensajeError(error, 'No pudimos actualizar el estado de esa cuenta.'))
+    } finally {
+      setPendingAction('')
+    }
+  }
+
+  async function handlePasswordReset(user) {
+    const restriction = getResetRestriction(user)
+    if (restriction) {
+      setFeedback(restriction)
+      return
+    }
+
+    const actionKey = `reset:${user.id}`
+
+    setPendingAction(actionKey)
+    setFeedback('')
+
+    try {
+      await requestPasswordReset(user.id)
+      setFeedback(`Correo de recuperación enviado a ${user.email}.`)
+    } catch (error) {
+      setFeedback(
+        obtenerMensajeError(error, 'No pudimos enviar el correo de recuperación a esa cuenta.'),
+      )
+    } finally {
+      setPendingAction('')
+    }
+  }
+
   return (
     <div className="space-y-8">
       <Tarjeta accent className="space-y-6">
@@ -79,13 +167,13 @@ export function PaginaAdminUsuarios() {
             Cuentas, roles y progreso de la plataforma
           </h1>
           <p className="max-w-3xl text-lg leading-8 text-mute">
-            Este panel cubre la base de la HU-17: listado de usuarios, cambio de rol,
-            deshabilitación a nivel de aplicación, envío de correo de recuperación y vista rápida del progreso individual.
+            Consulta personas registradas, revisa su avance, cambia roles, habilita o
+            deshabilita cuentas y, cuando aplique, envía correos de recuperación.
           </p>
         </div>
       </Tarjeta>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Tarjeta className="space-y-2">
           <p className="text-xs uppercase tracking-[0.24em] text-mute">Total</p>
           <p className="font-display text-3xl font-semibold text-foam">{metrics.totalUsers}</p>
@@ -96,11 +184,19 @@ export function PaginaAdminUsuarios() {
         </Tarjeta>
         <Tarjeta className="space-y-2">
           <p className="text-xs uppercase tracking-[0.24em] text-mute">Deshabilitados</p>
-          <p className="font-display text-3xl font-semibold text-foam">{metrics.disabledUsers}</p>
+          <p className="font-display text-3xl font-semibold text-foam">
+            {metrics.disabledUsers}
+          </p>
         </Tarjeta>
         <Tarjeta className="space-y-2">
           <p className="text-xs uppercase tracking-[0.24em] text-mute">Admins</p>
           <p className="font-display text-3xl font-semibold text-foam">{metrics.adminUsers}</p>
+        </Tarjeta>
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Actividad 7 días</p>
+          <p className="font-display text-3xl font-semibold text-foam">
+            {metrics.usersWithRecentActivity}
+          </p>
         </Tarjeta>
       </div>
 
@@ -132,18 +228,27 @@ export function PaginaAdminUsuarios() {
       <div className="grid gap-4">
         {visibleUsers.map((user) => {
           const snapshot = obtenerResumenUsuario(user, userStates[user.id])
-          const canEdit = currentUser?.id !== user.id
-          const resetRestriction = getResetRestriction(user, canEdit)
-          const canResetPassword = !resetRestriction
+          const roleRestriction = getRoleRestriction(user)
+          const statusRestriction = getStatusRestriction(user)
+          const resetRestriction = getResetRestriction(user)
+          const isRoleBusy = isBusy(`role:${user.id}`)
+          const isStatusBusy = isBusy(`status:${user.id}`)
+          const isResetBusy = isBusy(`reset:${user.id}`)
+          const roleButtonLabel =
+            user.systemRole === 'admin' ? 'Quitar rol admin' : 'Dar rol admin'
+          const statusButtonLabel =
+            user.status === 'disabled' ? 'Reactivar cuenta' : 'Deshabilitar cuenta'
 
           return (
             <Tarjeta key={user.id} className="space-y-5">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div className="space-y-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="eyebrow">{user.systemRole === 'admin' ? 'Admin' : 'Estudiante'}</span>
                     <span className="status-chip">
-                      {user.status === 'disabled' ? 'Deshabilitado' : 'Activo'}
+                      {user.systemRole === 'admin' ? 'Admin' : 'Estudiante'}
+                    </span>
+                    <span className="status-chip">
+                      {user.status === 'disabled' ? 'Deshabilitada' : 'Activa'}
                     </span>
                     <span className="status-chip">
                       {user.provider === 'google' ? 'Google' : 'Correo'}
@@ -159,7 +264,9 @@ export function PaginaAdminUsuarios() {
                     <p className="mt-2 text-sm text-mute">{user.email}</p>
                     <p className="mt-2 text-sm text-mute">
                       Último acceso:{' '}
-                      {user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString('es-CO') : 'Sin registro'}
+                      {user.lastLoginAt
+                        ? new Date(user.lastLoginAt).toLocaleString('es-CO')
+                        : 'Sin registro'}
                     </p>
                   </div>
                 </div>
@@ -167,7 +274,9 @@ export function PaginaAdminUsuarios() {
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
                     <p className="text-xs uppercase tracking-[0.22em] text-mute">Lecciones</p>
-                    <p className="mt-2 text-lg font-semibold text-foam">{snapshot.completedLessons}</p>
+                    <p className="mt-2 text-lg font-semibold text-foam">
+                      {snapshot.completedLessons}
+                    </p>
                   </div>
                   <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
                     <p className="text-xs uppercase tracking-[0.22em] text-mute">Evaluaciones</p>
@@ -176,8 +285,12 @@ export function PaginaAdminUsuarios() {
                     </p>
                   </div>
                   <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-mute">Rutas con avance</p>
-                    <p className="mt-2 text-lg font-semibold text-foam">{snapshot.touchedCourses.length}</p>
+                    <p className="text-xs uppercase tracking-[0.22em] text-mute">
+                      Rutas con avance
+                    </p>
+                    <p className="mt-2 text-lg font-semibold text-foam">
+                      {snapshot.touchedCourses.length}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -191,35 +304,52 @@ export function PaginaAdminUsuarios() {
                     )
                     .join(' / ')}
                 </div>
-              ) : null}
-
-              {resetRestriction ? (
+              ) : (
                 <div className="rounded-2xl border border-border/80 bg-white/5 p-4 text-sm text-mute">
-                  {resetRestriction}
+                  Esta cuenta todavía no registra avance en cursos o evaluaciones.
                 </div>
-              ) : null}
+              )}
+
+              <div className="grid gap-3 lg:grid-cols-3">
+                <div className="rounded-2xl border border-border/80 bg-white/5 p-4 text-sm text-mute">
+                  {roleRestriction || 'Puedes alternar entre rol de estudiante y rol admin.'}
+                </div>
+                <div className="rounded-2xl border border-border/80 bg-white/5 p-4 text-sm text-mute">
+                  {statusRestriction ||
+                    'Puedes bloquear temporalmente el acceso y luego reactivarlo.'}
+                </div>
+                <div className="rounded-2xl border border-border/80 bg-white/5 p-4 text-sm text-mute">
+                  {resetRestriction ||
+                    'Envía un correo de recuperación para cuentas creadas con email.'}
+                </div>
+              </div>
 
               <div className="flex flex-col gap-3 lg:flex-row">
                 <Boton
                   variant="secondary"
-                  disabled={!canEdit}
-                  onClick={() => handleToggleRole(user)}
+                  disabled={Boolean(roleRestriction) || Boolean(pendingAction)}
+                  onClick={() => handleRoleToggle(user)}
                 >
-                  {user.systemRole === 'admin' ? 'Quitar admin' : 'Dar rol admin'}
+                  {isRoleBusy
+                    ? 'Actualizando rol...'
+                    : roleButtonLabel}
                 </Boton>
                 <Boton
                   variant="secondary"
-                  disabled={!canResetPassword}
-                  onClick={() => handlePasswordReset(user.id)}
+                  className="border-amber-500/30 bg-amber-500/10 text-amber-100 hover:bg-amber-500/15"
+                  disabled={Boolean(statusRestriction) || Boolean(pendingAction)}
+                  onClick={() => handleStatusToggle(user)}
                 >
-                  {canResetPassword ? 'Enviar correo de recuperación' : 'Reset no disponible'}
+                  {isStatusBusy
+                    ? 'Actualizando estado...'
+                    : statusButtonLabel}
                 </Boton>
                 <Boton
-                  variant="ghost"
-                  disabled={!canEdit}
-                  onClick={() => handleToggleStatus(user.id)}
+                  variant="secondary"
+                  disabled={Boolean(resetRestriction) || Boolean(pendingAction)}
+                  onClick={() => handlePasswordReset(user)}
                 >
-                  {user.status === 'disabled' ? 'Reactivar cuenta' : 'Deshabilitar cuenta'}
+                  {isResetBusy ? 'Enviando correo...' : 'Enviar correo de recuperación'}
                 </Boton>
               </div>
             </Tarjeta>
@@ -229,5 +359,3 @@ export function PaginaAdminUsuarios() {
     </div>
   )
 }
-
-

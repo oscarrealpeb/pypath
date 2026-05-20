@@ -12,16 +12,17 @@ export function PaginaAdminMetricas() {
         <div className="space-y-4">
           <p className="eyebrow">Administración / Métricas</p>
           <h1 className="font-display text-4xl font-semibold text-foam">
-            Señales básicas de uso de la plataforma
+            Señales básicas de uso y gestión
           </h1>
           <p className="max-w-3xl text-lg leading-8 text-mute">
-            Vista rápida del estado de la plataforma: usuarios activos, cuentas deshabilitadas,
-            administradores, cursos con más tracción y movimientos recientes.
+            Vista rápida del estado de la plataforma: usuarios activos, cuentas
+            deshabilitadas, roles administrativos, cursos con más tracción y movimientos
+            sincronizados.
           </p>
         </div>
       </Tarjeta>
 
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <Tarjeta className="space-y-2">
           <p className="text-xs uppercase tracking-[0.24em] text-mute">Usuarios</p>
           <p className="font-display text-3xl font-semibold text-foam">{metrics.totalUsers}</p>
@@ -32,7 +33,9 @@ export function PaginaAdminMetricas() {
         </Tarjeta>
         <Tarjeta className="space-y-2">
           <p className="text-xs uppercase tracking-[0.24em] text-mute">Deshabilitados</p>
-          <p className="font-display text-3xl font-semibold text-foam">{metrics.disabledUsers}</p>
+          <p className="font-display text-3xl font-semibold text-foam">
+            {metrics.disabledUsers}
+          </p>
         </Tarjeta>
         <Tarjeta className="space-y-2">
           <p className="text-xs uppercase tracking-[0.24em] text-mute">Admins</p>
@@ -79,7 +82,7 @@ export function PaginaAdminMetricas() {
 
         <Tarjeta className="space-y-5">
           <div>
-            <p className="eyebrow">Actividad reciente</p>
+            <p className="eyebrow">Actividad sincronizada</p>
             <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
               Últimos eventos registrados
             </h2>
@@ -103,8 +106,8 @@ export function PaginaAdminMetricas() {
               ))
             ) : (
               <div className="rounded-2xl border border-border/80 bg-white/5 px-4 py-4 text-sm text-mute">
-                Aún no hay actividad registrada. Inicia sesión, completa una misión o edita
-                contenido para poblar esta vista.
+                Aún no hay actividad sincronizada. Inicia sesión, completa una misión o
+                gestiona usuarios y contenido desde una sesión autenticada para poblar esta vista.
               </div>
             )}
           </div>

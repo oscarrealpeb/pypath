@@ -4,8 +4,11 @@ import { Boton } from '../../../componentes/Boton.jsx'
 import { MensajeValidacionCampo } from '../../../componentes/MensajeValidacionCampo.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { obtenerCatalogoCursos } from '../../contenido/servicios/repositorioContenido.js'
-import { esCorreoAdminPrivilegiado } from '../servicios/clienteFirebase.js'
-import { verificarDisponibilidadCorreo } from '../servicios/servicioFirebaseAutenticacion.js'
+import { BOOTSTRAP_ADMIN_EMAIL } from '../servicios/clienteFirebase.js'
+import {
+  esUsuarioAdministrador,
+  verificarDisponibilidadCorreo,
+} from '../servicios/servicioFirebaseAutenticacion.js'
 import { verificarDisponibilidadNombreVisible } from '../servicios/servicioPerfilesFirebase.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 import {
@@ -51,6 +54,9 @@ function PasswordStrengthMeter({ password }) {
   )
 }
 
+const ADMIN_PORTAL_AUTH_ERROR =
+  'Este correo no tiene acceso administrativo, o la contraseña es incorrecta.'
+
 export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAccess = false }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -72,11 +78,8 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const [debugAuthDetail, setDebugAuthDetail] = useState('')
   const [nameAvailabilityFeedback, setNameAvailabilityFeedback] = useState({
-    status: 'idle',
-    message: '',
-  })
-  const [emailAvailabilityFeedback, setEmailAvailabilityFeedback] = useState({
     status: 'idle',
     message: '',
   })
@@ -126,27 +129,13 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
       }
     }
 
-    return emailAvailabilityFeedback
-  }, [emailAvailabilityFeedback, formState.email, isRegister])
+    return { status: 'idle', message: '' }
+  }, [formState.email, isRegister])
 
   function handleChange(event) {
     const { name, value } = event.target
     setError('')
-
-    if (name === 'email') {
-      const trimmedEmail = value.trim()
-
-      if (!trimmedEmail) {
-        setEmailAvailabilityFeedback({ status: 'idle', message: '' })
-      } else if (esCorreoValido(trimmedEmail)) {
-        setEmailAvailabilityFeedback({
-          status: 'checking',
-          message: 'Validando disponibilidad del correo...',
-        })
-      } else {
-        setEmailAvailabilityFeedback({ status: 'idle', message: '' })
-      }
-    }
+    setDebugAuthDetail('')
 
     if (name === 'name') {
       const trimmedName = crearNombreCompleto(value)
@@ -197,33 +186,6 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
     }
   }, [formState.name, isRegister])
 
-  useEffect(() => {
-    if (!isRegister) {
-      return undefined
-    }
-
-    const trimmedEmail = formState.email.trim()
-
-    if (!trimmedEmail || !esCorreoValido(trimmedEmail)) {
-      return undefined
-    }
-
-    let isCancelled = false
-
-    const timeoutId = window.setTimeout(async () => {
-      const nextFeedback = await verificarDisponibilidadCorreo(trimmedEmail)
-
-      if (!isCancelled) {
-        setEmailAvailabilityFeedback(nextFeedback)
-      }
-    }, 350)
-
-    return () => {
-      isCancelled = true
-      window.clearTimeout(timeoutId)
-    }
-  }, [formState.email, isRegister])
-
   function validateRegisterFields() {
     const nameMessage = validarNombreVisible(formState.name)
 
@@ -254,12 +216,16 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
 
   function validateLoginFields() {
     if (!formState.identifier.trim() || !formState.password.trim()) {
-      setError('Escribe tu correo o nombre de usuario, y tu contraseña.')
+      setError(
+        isAdminPortal
+          ? 'Escribe tu correo y tu contraseña.'
+          : 'Escribe tu correo o nombre de usuario, y tu contraseña.',
+      )
       return false
     }
 
-    if (isAdminPortal && !esCorreoValido(formState.identifier)) {
-      setError('El panel administrativo solo permite acceso con correo.')
+    if (isAdminPortal && !esCorreoValido(formState.identifier.trim())) {
+      setError('Escribe un correo válido para entrar al panel interno.')
       return false
     }
 
@@ -276,23 +242,17 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
         return
       }
 
-      const resolvedAuthEmail =
-        authenticatedUser.email ?? payload.email ?? payload.identifier ?? ''
+      const authenticatedUserIsAdmin = esUsuarioAdministrador(authenticatedUser)
 
-      if (!requireAdminAccess && esCorreoAdminPrivilegiado(resolvedAuthEmail)) {
+      if (requireAdminAccess && !authenticatedUserIsAdmin) {
         await logout()
-        setError('Esta cuenta usa el acceso interno del panel.')
+        setError(ADMIN_PORTAL_AUTH_ERROR)
+        setDebugAuthDetail('La autenticación sí ocurrió, pero la sesión resultante no quedó reconocida como admin.')
         return
       }
 
-      if (requireAdminAccess && !esCorreoAdminPrivilegiado(resolvedAuthEmail)) {
-        await logout()
-        setError('Este acceso está reservado para administración.')
-        return
-      }
-
-      if (requireAdminAccess && esCorreoAdminPrivilegiado(resolvedAuthEmail)) {
-        navigate('/admin', { replace: true })
+      if (authenticatedUserIsAdmin) {
+        navigate('/admin/contenido', { replace: true })
         return
       }
 
@@ -301,10 +261,22 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
         return
       }
 
-      const resolvedRoute = esCorreoAdminPrivilegiado(resolvedAuthEmail) ? '/admin' : nextRoute
-      navigate(resolvedRoute, { replace: true })
+      navigate(nextRoute, { replace: true })
     } catch (authError) {
-      setError(authError.message || 'No pudimos completar la autenticación.')
+      if (isAdminPortal) {
+        console.error('No pudimos completar el acceso administrativo.', authError)
+        setDebugAuthDetail(
+          authError?.cause?.code ||
+            authError?.code ||
+            authError?.message ||
+            'Sin detalle adicional disponible.',
+        )
+      }
+      setError(
+        isAdminPortal
+          ? ADMIN_PORTAL_AUTH_ERROR
+          : authError.message || 'No pudimos completar la autenticación.',
+      )
     } finally {
       setIsLoading(false)
     }
@@ -313,6 +285,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
+    setDebugAuthDetail('')
 
     if (!isRegister) {
       if (!validateLoginFields()) {
@@ -342,7 +315,6 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
     }
 
     const nextEmailFeedback = await verificarDisponibilidadCorreo(formState.email)
-    setEmailAvailabilityFeedback(nextEmailFeedback)
 
     if (nextEmailFeedback.status === 'invalid' || nextEmailFeedback.status === 'taken') {
       setError(nextEmailFeedback.message)
@@ -365,11 +337,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
 
   async function handleGoogleAccess() {
     setError('')
-
-    if (isAdminPortal || requireAdminAccess) {
-      setError('El panel administrativo solo permite acceso con admin@pypath.com y contraseña.')
-      return
-    }
+    setDebugAuthDetail('')
 
     await runAuth(
       {
@@ -411,7 +379,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
               </h1>
               <p className="text-sm text-mute">
                 {isAdminPortal
-                  ? 'Usa el correo autorizado del proyecto para entrar al panel interno.'
+                  ? 'Usa una cuenta que ya tenga rol admin para entrar al panel interno.'
                   : isRegister
                     ? 'Pedimos solo lo mínimo para crear tu acceso. El perfil de aprendizaje lo completas después.'
                     : 'Puedes entrar con correo, nombre de usuario o Google.'}
@@ -475,6 +443,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
                   />
                   <MensajeValidacionCampo feedback={emailFeedback} />
                 </label>
+
               </>
             ) : (
               <label className="block space-y-2">
@@ -486,9 +455,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
                   type={isAdminPortal ? 'email' : 'text'}
                   name="identifier"
                   placeholder={
-                    isAdminPortal
-                      ? 'admin@pypath.com'
-                      : 'correo@pypath.dev o tu nombre de usuario'
+                    isAdminPortal ? BOOTSTRAP_ADMIN_EMAIL : 'correo@pypath.dev o tu nombre de usuario'
                   }
                   value={formState.identifier}
                   onChange={handleChange}
@@ -530,6 +497,12 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
               </div>
             ) : null}
 
+            {isAdminPortal && import.meta.env.DEV && debugAuthDetail ? (
+              <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-xs text-foam">
+                <span className="font-semibold">Detalle técnico:</span> {debugAuthDetail}
+              </div>
+            ) : null}
+
             {!isRegister && !isAdminPortal ? (
               <p className="text-right text-sm text-mute">
                 <Link
@@ -549,7 +522,7 @@ export function PaginaAutenticacion({ mode, portal = 'student', requireAdminAcce
                     ? 'Entrar al panel interno'
                     : isRegister
                       ? 'Crear cuenta'
-                      : 'Entrar al panel'}
+                      : 'Entrar'}
               </Boton>
 
               {!isAdminPortal ? (

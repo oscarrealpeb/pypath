@@ -1,3 +1,5 @@
+import { crearContenidoInicial } from '../../contenido/servicios/repositorioContenido.js'
+
 function slugify(value) {
   return value
     .toLowerCase()
@@ -10,6 +12,13 @@ function slugify(value) {
 function clone(value) {
   return JSON.parse(JSON.stringify(value))
 }
+
+const DEFAULT_CONTENT = crearContenidoInicial()
+const DEFAULT_CONTENT_COURSE_IDS = new Set([
+  ...DEFAULT_CONTENT.cursos.map((course) => course.id),
+  ...DEFAULT_CONTENT.catalogoCursos.map((course) => course.id),
+  ...Object.keys(DEFAULT_CONTENT.evaluacionesCursos ?? {}),
+])
 
 function withUniqueId(baseId, takenIds) {
   if (!takenIds.has(baseId)) {
@@ -37,6 +46,70 @@ function serializarJsonLegible(value) {
 }
 
 const TIPOS_LAYOUT_APOYO = new Set(['video', 'note', 'documentation', 'example', 'blocks', 'block'])
+
+function normalizarListaIds(items = []) {
+  return Array.from(
+    new Set(
+      (Array.isArray(items) ? items : [])
+        .filter((item) => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+function asegurarMetadatosCms(content) {
+  content.cursosGestionadosCms = normalizarListaIds(content.cursosGestionadosCms)
+  content.catalogosGestionadosCms = normalizarListaIds(content.catalogosGestionadosCms)
+  content.evaluacionesGestionadasCms = normalizarListaIds(content.evaluacionesGestionadasCms)
+  content.cursosEliminadosCms = normalizarListaIds(content.cursosEliminadosCms)
+  return content
+}
+
+function marcarIdEnListaCms(content, key, courseId) {
+  asegurarMetadatosCms(content)
+
+  if (!content[key].includes(courseId)) {
+    content[key].push(courseId)
+  }
+
+  content.cursosEliminadosCms = content.cursosEliminadosCms.filter(
+    (managedCourseId) => managedCourseId !== courseId,
+  )
+
+  return content
+}
+
+function marcarCursoGestionadoCms(content, courseId) {
+  return marcarIdEnListaCms(content, 'cursosGestionadosCms', courseId)
+}
+
+function marcarCatalogoGestionadoCms(content, courseId) {
+  return marcarIdEnListaCms(content, 'catalogosGestionadosCms', courseId)
+}
+
+function marcarEvaluacionesGestionadasCms(content, courseId) {
+  return marcarIdEnListaCms(content, 'evaluacionesGestionadasCms', courseId)
+}
+
+function marcarCursoEliminadoCms(content, courseId) {
+  asegurarMetadatosCms(content)
+  content.cursosGestionadosCms = content.cursosGestionadosCms.filter(
+    (managedCourseId) => managedCourseId !== courseId,
+  )
+  content.catalogosGestionadosCms = content.catalogosGestionadosCms.filter(
+    (managedCourseId) => managedCourseId !== courseId,
+  )
+  content.evaluacionesGestionadasCms = content.evaluacionesGestionadasCms.filter(
+    (managedCourseId) => managedCourseId !== courseId,
+  )
+
+  if (DEFAULT_CONTENT_COURSE_IDS.has(courseId) && !content.cursosEliminadosCms.includes(courseId)) {
+    content.cursosEliminadosCms.push(courseId)
+  }
+
+  return content
+}
 
 function parsearJsonConRespaldo(text, fallback) {
   if (!text?.trim()) {
@@ -508,7 +581,7 @@ export function aplicarBorradorEvaluacion(assessment, draft) {
 }
 
 function cloneContent(content) {
-  return clone(content)
+  return asegurarMetadatosCms(clone(content))
 }
 
 export function crearCursoEnContenido(content, courseName) {
@@ -521,6 +594,9 @@ export function crearCursoEnContenido(content, courseName) {
     unitAssessments: {},
     finalAssessment: template.finalAssessment,
   }
+  marcarCursoGestionadoCms(nextContent, template.course.id)
+  marcarCatalogoGestionadoCms(nextContent, template.course.id)
+  marcarEvaluacionesGestionadasCms(nextContent, template.course.id)
   return {
     content: nextContent,
     courseId: template.course.id,
@@ -535,6 +611,9 @@ export function materializarCursoCmsEnContenido(content, courseId, sourcePrefere
   const draftSource = nextContent.cursosBorrador?.[courseId] ?? null
 
   if (existingCourse) {
+    marcarCursoGestionadoCms(nextContent, courseId)
+    marcarCatalogoGestionadoCms(nextContent, courseId)
+    marcarEvaluacionesGestionadasCms(nextContent, courseId)
     return {
       content: nextContent,
       mode: 'existing',
@@ -563,6 +642,10 @@ export function materializarCursoCmsEnContenido(content, courseId, sourcePrefere
       nextContent.catalogoCursos.push(compatibleMeta)
     }
 
+    marcarCursoGestionadoCms(nextContent, courseId)
+    marcarCatalogoGestionadoCms(nextContent, courseId)
+    marcarEvaluacionesGestionadasCms(nextContent, courseId)
+
     return {
       content: nextContent,
       mode: 'code',
@@ -589,7 +672,7 @@ export function materializarCursoCmsEnContenido(content, courseId, sourcePrefere
     requiredCourseIds: clone(existingMeta?.requiredCourseIds ?? template.meta.requiredCourseIds),
   }
   template.finalAssessment.id = `${courseId}-final`
-  template.finalAssessment.title = `Evaluacion final del curso: ${template.course.title}`
+  template.finalAssessment.title = `Evaluación final del curso: ${template.course.title}`
 
   nextContent.cursos.push(template.course)
   nextContent.evaluacionesCursos[courseId] = {
@@ -603,6 +686,10 @@ export function materializarCursoCmsEnContenido(content, courseId, sourcePrefere
     nextContent.catalogoCursos.push(template.meta)
   }
 
+  marcarCursoGestionadoCms(nextContent, courseId)
+  marcarCatalogoGestionadoCms(nextContent, courseId)
+  marcarEvaluacionesGestionadasCms(nextContent, courseId)
+
   return {
     content: nextContent,
     mode: 'catalog',
@@ -610,21 +697,31 @@ export function materializarCursoCmsEnContenido(content, courseId, sourcePrefere
 }
 
 export function actualizarCursoEnContenido(content, courseId, courseDraft) {
-  const nextContent = cloneContent(content)
-  const courseIndex = nextContent.cursos.findIndex((course) => course.id === courseId)
-  const metaIndex = nextContent.catalogoCursos.findIndex((course) => course.id === courseId)
+  const courseIndex = content.cursos.findIndex((course) => course.id === courseId)
+  const metaIndex = content.catalogoCursos.findIndex((course) => course.id === courseId)
 
   if (courseIndex < 0 || metaIndex < 0) {
-    return nextContent
+    return content
   }
 
   const applied = aplicarBorradorCurso(
-    nextContent.cursos[courseIndex],
-    nextContent.catalogoCursos[metaIndex],
+    content.cursos[courseIndex],
+    content.catalogoCursos[metaIndex],
     courseDraft,
   )
+  const nextContent = {
+    ...content,
+    cursos: [...content.cursos],
+    catalogoCursos: [...content.catalogoCursos],
+    cursosGestionadosCms: [...(content.cursosGestionadosCms ?? [])],
+    catalogosGestionadosCms: [...(content.catalogosGestionadosCms ?? [])],
+    evaluacionesGestionadasCms: [...(content.evaluacionesGestionadasCms ?? [])],
+    cursosEliminadosCms: [...(content.cursosEliminadosCms ?? [])],
+  }
   nextContent.cursos[courseIndex] = applied.course
   nextContent.catalogoCursos[metaIndex] = applied.meta
+  marcarCursoGestionadoCms(nextContent, courseId)
+  marcarCatalogoGestionadoCms(nextContent, courseId)
   return nextContent
 }
 
@@ -653,6 +750,7 @@ export function eliminarCursoEnContenido(content, courseId) {
     delete nextContent.evaluacionesCursos[courseId]
   }
 
+  marcarCursoEliminadoCms(nextContent, courseId)
   return nextContent
 }
 
@@ -667,6 +765,7 @@ export function alternarPublicacionCursoEnContenido(content, courseId) {
   const nextStatus = meta.status === 'live' ? 'draft' : 'live'
   meta.status = nextStatus
   meta.statusLabel = nextStatus === 'live' ? 'Disponible ahora' : 'Borrador'
+  marcarCatalogoGestionadoCms(nextContent, courseId)
   return nextContent
 }
 
@@ -685,6 +784,8 @@ export function crearUnidadEnContenido(content, courseId, unitName) {
   course.units.push(template.unit)
   nextContent.evaluacionesCursos[courseId] ??= { unitAssessments: {}, finalAssessment: null }
   nextContent.evaluacionesCursos[courseId].unitAssessments[template.unit.id] = template.assessment
+  marcarCursoGestionadoCms(nextContent, courseId)
+  marcarEvaluacionesGestionadasCms(nextContent, courseId)
 
   return {
     content: nextContent,
@@ -711,6 +812,8 @@ export function actualizarUnidadEnContenido(content, courseId, unitId, patch) {
     assessment.summary = patch.assessmentSummary?.trim() || assessment.summary
   }
 
+  marcarCursoGestionadoCms(nextContent, courseId)
+  marcarEvaluacionesGestionadasCms(nextContent, courseId)
   return nextContent
 }
 
@@ -728,6 +831,8 @@ export function eliminarUnidadEnContenido(content, courseId, unitId) {
     delete nextContent.evaluacionesCursos[courseId].unitAssessments[unitId]
   }
 
+  marcarCursoGestionadoCms(nextContent, courseId)
+  marcarEvaluacionesGestionadasCms(nextContent, courseId)
   return nextContent
 }
 
@@ -744,6 +849,7 @@ export function actualizarEvaluacionUnidadEnContenido(content, courseId, unitId,
     draft,
   )
 
+  marcarEvaluacionesGestionadasCms(nextContent, courseId)
   return nextContent
 }
 
@@ -755,7 +861,11 @@ export function actualizarEvaluacionFinalEnContenido(content, courseId, draft) {
     return nextContent
   }
 
-  nextContent.evaluacionesCursos[courseId].finalAssessment = aplicarBorradorEvaluacion(assessment, draft)
+  nextContent.evaluacionesCursos[courseId].finalAssessment = aplicarBorradorEvaluacion(
+    assessment,
+    draft,
+  )
+  marcarEvaluacionesGestionadasCms(nextContent, courseId)
   return nextContent
 }
 
@@ -772,6 +882,7 @@ export function crearLeccionEnContenido(content, courseId, unitId, lessonName) {
   const takenIds = new Set(unit.lessons.map((lesson) => lesson.id))
   template.id = withUniqueId(template.id, takenIds)
   unit.lessons.push(template)
+  marcarCursoGestionadoCms(nextContent, courseId)
 
   return {
     content: nextContent,
@@ -790,6 +901,7 @@ export function actualizarLeccionEnContenido(content, courseId, unitId, lessonId
   }
 
   unit.lessons[lessonIndex] = aplicarBorradorLeccion(unit.lessons[lessonIndex], draft, courseId)
+  marcarCursoGestionadoCms(nextContent, courseId)
   return nextContent
 }
 
@@ -803,5 +915,6 @@ export function eliminarLeccionEnContenido(content, courseId, unitId, lessonId) 
   }
 
   unit.lessons = unit.lessons.filter((lesson) => lesson.id !== lessonId)
+  marcarCursoGestionadoCms(nextContent, courseId)
   return nextContent
 }

@@ -1,4 +1,5 @@
 ﻿import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   actualizarCursoEnContenido,
   actualizarEvaluacionFinalEnContenido,
@@ -14,11 +15,16 @@ import {
   eliminarUnidadEnContenido,
 } from '../../administracion/servicios/servicioAdminContenido.js'
 import {
+  registrarEventoPlataforma,
+  suscribirActividadPlataforma,
+} from '../../administracion/servicios/servicioActividadPlataforma.js'
+import {
   actualizarContrasenaUsuarioActual,
   actualizarNombreVisibleUsuarioActual,
   cerrarSesionFirebase,
   consumirSemillaRedireccionGoogle,
   enviarCorreoRecuperacion,
+  esUsuarioAdministrador,
   iniciarSesionConCorreoONickname,
   iniciarSesionConGoogle,
   refrescarUsuarioActualFirebase,
@@ -29,6 +35,7 @@ import {
 } from '../../autenticacion/servicios/servicioFirebaseAutenticacion.js'
 import {
   asegurarPerfilUsuario,
+  buscarPerfilPorNickname,
   buscarPerfilPorNombreVisible,
   construirUsuarioAplicacion,
   guardarEstadoAprendizajeUsuario,
@@ -39,6 +46,7 @@ import {
 import {
   crearNombreCompleto,
   obtenerMensajeContrasenaMinima,
+  validarNickname,
 } from '../../autenticacion/servicios/servicioValidacionAutenticacion.js'
 import {
   guardarContenidoCms,
@@ -56,6 +64,7 @@ import {
 } from '../servicios/estadoUsuarioBase.js'
 import {
   cargarEstadoApp,
+  crearEstadoSincronizacionCms,
   guardarEstadoApp,
 } from '../servicios/servicioEstadoApp.js'
 import { ContextoAccionesApp, ContextoEstadoApp } from './ContextosEstadoApp.js'
@@ -69,10 +78,34 @@ function createActivityEntry(type, payload = {}) {
   }
 }
 
+function getActivityTimestamp(entry) {
+  const timestamp = new Date(entry?.timestamp ?? 0).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function mergeActivityEntries(...entryGroups) {
+  const activityById = new Map()
+
+  entryGroups.flat().forEach((entry) => {
+    if (!entry?.id) {
+      return
+    }
+
+    activityById.set(entry.id, {
+      ...(activityById.get(entry.id) ?? {}),
+      ...entry,
+    })
+  })
+
+  return Array.from(activityById.values())
+    .sort((left, right) => getActivityTimestamp(right) - getActivityTimestamp(left))
+    .slice(0, 200)
+}
+
 function appendActivity(state, entry) {
   return {
     ...state,
-    activity: [...state.activity, entry].slice(-200),
+    activity: mergeActivityEntries(state.activity, [entry]),
   }
 }
 
@@ -127,6 +160,28 @@ function upsertUser(users = [], nextUser) {
   return users.map((user) => (user.id === nextUser.id ? nextUser : user))
 }
 
+function fusionarUsuarioSesion(currentUser, syncedUser) {
+  if (!syncedUser) {
+    return currentUser
+  }
+
+  if (!currentUser || currentUser.id !== syncedUser.id) {
+    return syncedUser
+  }
+
+  return {
+    ...syncedUser,
+    email: syncedUser.email || currentUser.email,
+    provider: syncedUser.provider || currentUser.provider,
+    photoURL: syncedUser.photoURL || currentUser.photoURL,
+    status: syncedUser.status ?? currentUser.status,
+    emailVerified: currentUser.emailVerified ?? syncedUser.emailVerified,
+    systemRole: esUsuarioAdministrador(currentUser)
+      ? 'admin'
+      : syncedUser.systemRole ?? currentUser.systemRole,
+  }
+}
+
 function reducer(state, action) {
   switch (action.type) {
     case 'SET_AUTH_STATUS':
@@ -134,6 +189,15 @@ function reducer(state, action) {
         ...state,
         authReady: action.payload.authReady,
         firebaseEnabled: action.payload.firebaseEnabled,
+      }
+
+    case 'SET_CMS_SYNC':
+      return {
+        ...state,
+        cmsSync: {
+          ...state.cmsSync,
+          ...action.payload,
+        },
       }
 
     case 'SYNC_SESSION': {
@@ -165,10 +229,18 @@ function reducer(state, action) {
         userStates: {},
         onboarding: crearEstadoDiagnosticoInicial(),
         progress: crearProgresoInicial(),
+        activity: [],
+        cmsSync: crearEstadoSincronizacionCms(),
       }
 
     case 'APPEND_ACTIVITY':
       return appendActivity(state, action.payload)
+
+    case 'SYNC_ACTIVITY_FEED':
+      return {
+        ...state,
+        activity: mergeActivityEntries(state.activity, action.payload),
+      }
 
     case 'UPDATE_USER_PROFILE': {
       const nextState = withUpdatedCurrentUser(state, (currentUser) => ({
@@ -363,10 +435,15 @@ function reducer(state, action) {
     }
 
     case 'SET_USERS_AND_STATES': {
-      const currentUser =
+      const syncedCurrentUser =
         action.payload.currentUserId != null
           ? action.payload.users.find((user) => user.id === action.payload.currentUserId) ?? state.user
           : state.user
+      const currentUser = fusionarUsuarioSesion(state.user, syncedCurrentUser)
+      const nextUsers =
+        currentUser && action.payload.currentUserId != null
+          ? action.payload.users.map((user) => (user.id === currentUser.id ? currentUser : user))
+          : action.payload.users
       const currentUserState =
         currentUser && action.payload.userStates[currentUser.id]
           ? action.payload.userStates[currentUser.id]
@@ -374,7 +451,7 @@ function reducer(state, action) {
       const nextState = {
         ...state,
         user: currentUser,
-        users: action.payload.users,
+        users: nextUsers,
         userStates: action.payload.userStates,
         onboarding: currentUserState?.onboarding ?? state.onboarding,
         progress: currentUserState?.progress ?? state.progress,
@@ -403,23 +480,37 @@ function reducer(state, action) {
 }
 
 export function ProveedorEstadoApp({ children }) {
+  const location = useLocation()
   const [state, dispatch] = useReducer(reducer, undefined, cargarEstadoApp)
   const stateRef = useRef(state)
   const persistedLearningStateRef = useRef('')
+  const persistStateTimerRef = useRef(null)
   const contentRemoteReadyRef = useRef(!state.firebaseEnabled)
   const persistedRemoteContentRef = useRef(
     JSON.stringify(serializarContenidoPersistible(state.content)),
   )
+  const pendingRemoteContentRef = useRef('')
+  const inFlightRemoteContentRef = useRef('')
+  const persistedActivityIdsRef = useRef(new Set())
+  const syncingActivityIdsRef = useRef(new Set())
+  const currentPath = location.pathname ?? '/'
+  const isAdminRoute = currentPath === '/admin' || currentPath.startsWith('/admin/')
+  const shouldSyncAdminUsers =
+    isAdminRoute &&
+    (currentPath.startsWith('/admin/resumen') ||
+      currentPath.startsWith('/admin/usuarios') ||
+      currentPath.startsWith('/admin/metricas'))
+  const shouldSyncAdminActivity = currentPath.startsWith('/admin/metricas')
 
   const sincronizarSesionResuelta = useCallback(async (firebaseUser, profile, activityType = null) => {
     const sessionUser = construirUsuarioAplicacion(firebaseUser, profile)
     const sessionUserState = construirEstadoUsuarioDesdePerfil(profile)
     const currentUsers =
-      stateRef.current.user?.systemRole === 'admin' && stateRef.current.users.length > 0
+      esUsuarioAdministrador(stateRef.current.user) && stateRef.current.users.length > 0
         ? stateRef.current.users
         : []
     const currentUserStates =
-      stateRef.current.user?.systemRole === 'admin' ? stateRef.current.userStates : {}
+      esUsuarioAdministrador(stateRef.current.user) ? stateRef.current.userStates : {}
     const nextUsers = upsertUser(currentUsers, sessionUser)
     const nextUserStates = {
       ...currentUserStates,
@@ -456,7 +547,10 @@ export function ProveedorEstadoApp({ children }) {
     }
 
     const redirectSeed = profileSeed ?? consumirSemillaRedireccionGoogle()
-    const profile = await asegurarPerfilUsuario(firebaseUser, redirectSeed ?? {})
+    const existingProfile = await obtenerPerfilUsuario(firebaseUser.uid)
+    const profile =
+      existingProfile ??
+      await asegurarPerfilUsuario(firebaseUser, redirectSeed ?? {})
 
     if (!profile) {
       dispatch({
@@ -475,21 +569,57 @@ export function ProveedorEstadoApp({ children }) {
       return null
     }
 
-    return sincronizarSesionResuelta(firebaseUser, profile, activityType)
+    return sincronizarSesionResuelta(
+      firebaseUser,
+      {
+        ...profile,
+        emailVerified: firebaseUser.emailVerified,
+      },
+      activityType,
+    )
   }, [sincronizarSesionResuelta])
 
   useEffect(() => {
     stateRef.current = state
-    actualizarSnapshotContenido(state.content)
   }, [state])
+
+  useEffect(() => {
+    actualizarSnapshotContenido(state.content)
+  }, [state.content])
+
+  useEffect(() => {
+    if (state.user) {
+      return
+    }
+
+    persistedActivityIdsRef.current = new Set()
+    syncingActivityIdsRef.current = new Set()
+  }, [state.user])
 
   useEffect(() => {
     aplicarTemaPreferido(state.themePreference)
   }, [state.themePreference])
 
   useEffect(() => {
-    guardarEstadoApp(state)
-  }, [state])
+    if (persistStateTimerRef.current) {
+      clearTimeout(persistStateTimerRef.current)
+    }
+
+    persistStateTimerRef.current = setTimeout(() => {
+      guardarEstadoApp({
+        themePreference: state.themePreference,
+        content: state.content,
+      })
+      persistStateTimerRef.current = null
+    }, 180)
+
+    return () => {
+      if (persistStateTimerRef.current) {
+        clearTimeout(persistStateTimerRef.current)
+        persistStateTimerRef.current = null
+      }
+    }
+  }, [state.themePreference, state.content])
 
   useEffect(() => {
     if (!state.firebaseEnabled) {
@@ -527,14 +657,26 @@ export function ProveedorEstadoApp({ children }) {
   useEffect(() => {
     if (!state.firebaseEnabled) {
       contentRemoteReadyRef.current = true
+      pendingRemoteContentRef.current = ''
+      inFlightRemoteContentRef.current = ''
       persistedRemoteContentRef.current = JSON.stringify(
         serializarContenidoPersistible(stateRef.current.content),
       )
       return undefined
     }
 
+    contentRemoteReadyRef.current = false
+    dispatch({
+      type: 'SET_CMS_SYNC',
+      payload: {
+        status: 'loading',
+        message: 'Cargando contenido del CMS desde Firestore...',
+      },
+    })
+
     const unsubscribe = suscribirContenidoCms(
       (remoteContent) => {
+        const wasRemoteReady = contentRemoteReadyRef.current
         const normalizedContent = normalizarContenidoPersistido(remoteContent)
         const serializedRemoteContent = JSON.stringify(
           serializarContenidoPersistible(normalizedContent),
@@ -542,9 +684,42 @@ export function ProveedorEstadoApp({ children }) {
         const serializedCurrentContent = JSON.stringify(
           serializarContenidoPersistible(stateRef.current.content),
         )
+        const pendingSerializedContent = pendingRemoteContentRef.current
+        const remoteMatchesPending =
+          pendingSerializedContent && serializedRemoteContent === pendingSerializedContent
 
         contentRemoteReadyRef.current = true
         persistedRemoteContentRef.current = serializedRemoteContent
+
+        if (remoteMatchesPending) {
+          pendingRemoteContentRef.current = ''
+          dispatch({
+            type: 'SET_CMS_SYNC',
+            payload: {
+              status: 'saved',
+              message: 'Cambios del CMS sincronizados con Firestore.',
+              lastSavedAt: new Date().toISOString(),
+            },
+          })
+        }
+
+        if (!wasRemoteReady && !remoteMatchesPending) {
+          dispatch({
+            type: 'SET_CMS_SYNC',
+            payload: {
+              status: 'idle',
+              message: '',
+            },
+          })
+        }
+
+        if (
+          pendingSerializedContent &&
+          serializedCurrentContent === pendingSerializedContent &&
+          serializedRemoteContent !== pendingSerializedContent
+        ) {
+          return
+        }
 
         if (serializedRemoteContent !== serializedCurrentContent) {
           dispatch({
@@ -556,6 +731,13 @@ export function ProveedorEstadoApp({ children }) {
       (error) => {
         console.error('No pudimos sincronizar el contenido del CMS desde Firestore.', error)
         contentRemoteReadyRef.current = true
+        dispatch({
+          type: 'SET_CMS_SYNC',
+          payload: {
+            status: 'error',
+            message: 'No pudimos leer el contenido remoto del CMS.',
+          },
+        })
       },
     )
 
@@ -563,7 +745,12 @@ export function ProveedorEstadoApp({ children }) {
   }, [state.firebaseEnabled])
 
   useEffect(() => {
-    if (!state.firebaseEnabled || !state.authReady || state.user?.systemRole !== 'admin') {
+    if (
+      !state.firebaseEnabled ||
+      !state.authReady ||
+      !esUsuarioAdministrador(state.user) ||
+      !shouldSyncAdminUsers
+    ) {
       return undefined
     }
 
@@ -590,7 +777,37 @@ export function ProveedorEstadoApp({ children }) {
     )
 
     return unsubscribe
-  }, [state.authReady, state.firebaseEnabled, state.user?.id, state.user?.systemRole])
+  }, [shouldSyncAdminUsers, state.authReady, state.firebaseEnabled, state.user])
+
+  useEffect(() => {
+    if (
+      !state.firebaseEnabled ||
+      !state.authReady ||
+      !esUsuarioAdministrador(state.user) ||
+      !shouldSyncAdminActivity
+    ) {
+      return undefined
+    }
+
+    const unsubscribe = suscribirActividadPlataforma(
+      (entries) => {
+        persistedActivityIdsRef.current = new Set([
+          ...persistedActivityIdsRef.current,
+          ...entries.map((entry) => entry.id),
+        ])
+
+        dispatch({
+          type: 'SYNC_ACTIVITY_FEED',
+          payload: entries,
+        })
+      },
+      (error) => {
+        console.error('No pudimos sincronizar la actividad de plataforma desde Firestore.', error)
+      },
+    )
+
+    return unsubscribe
+  }, [shouldSyncAdminActivity, state.authReady, state.firebaseEnabled, state.user])
 
   useEffect(() => {
     if (!state.firebaseEnabled || !state.authReady || !state.user) {
@@ -622,7 +839,7 @@ export function ProveedorEstadoApp({ children }) {
     if (
       !state.firebaseEnabled ||
       !state.authReady ||
-      state.user?.systemRole !== 'admin' ||
+      !esUsuarioAdministrador(state.user) ||
       !contentRemoteReadyRef.current
     ) {
       return
@@ -630,16 +847,104 @@ export function ProveedorEstadoApp({ children }) {
 
     const serializedContent = JSON.stringify(serializarContenidoPersistible(state.content))
 
-    if (serializedContent === persistedRemoteContentRef.current) {
+    if (
+      serializedContent === persistedRemoteContentRef.current &&
+      pendingRemoteContentRef.current === ''
+    ) {
       return
     }
 
-    persistedRemoteContentRef.current = serializedContent
+    if (
+      pendingRemoteContentRef.current === serializedContent ||
+      inFlightRemoteContentRef.current === serializedContent
+    ) {
+      return
+    }
 
-    guardarContenidoCms(state.content, state.user).catch((error) => {
-      console.error('No pudimos guardar el contenido del CMS en Firestore.', error)
+    pendingRemoteContentRef.current = serializedContent
+    inFlightRemoteContentRef.current = serializedContent
+    dispatch({
+      type: 'SET_CMS_SYNC',
+      payload: {
+        status: 'saving',
+        message: 'Guardando cambios del CMS en Firestore...',
+      },
     })
+
+    guardarContenidoCms(state.content, state.user)
+      .then(() => {
+        if (pendingRemoteContentRef.current === serializedContent) {
+          dispatch({
+            type: 'SET_CMS_SYNC',
+            payload: {
+              status: 'saved',
+              message: 'Cambios del CMS guardados. Firestore ya recibió la actualización.',
+              lastSavedAt: new Date().toISOString(),
+            },
+          })
+        }
+      })
+      .catch((error) => {
+        console.error('No pudimos guardar el contenido del CMS en Firestore.', error)
+
+        if (pendingRemoteContentRef.current === serializedContent) {
+          pendingRemoteContentRef.current = ''
+          dispatch({
+            type: 'SET_CMS_SYNC',
+            payload: {
+              status: 'error',
+              message: 'No pudimos sincronizar el CMS con Firestore. Intenta guardar de nuevo.',
+            },
+          })
+        }
+      })
+      .finally(() => {
+        if (inFlightRemoteContentRef.current === serializedContent) {
+          inFlightRemoteContentRef.current = ''
+        }
+      })
   }, [state.authReady, state.content, state.firebaseEnabled, state.user])
+
+  useEffect(() => {
+    if (!state.firebaseEnabled || !state.authReady || !state.user) {
+      return undefined
+    }
+
+    const pendingEntries = state.activity.filter(
+      (entry) =>
+        entry?.id &&
+        entry.userId === state.user.id &&
+        !persistedActivityIdsRef.current.has(entry.id) &&
+        !syncingActivityIdsRef.current.has(entry.id),
+    )
+
+    if (pendingEntries.length === 0) {
+      return undefined
+    }
+
+    let isCancelled = false
+
+    pendingEntries.forEach((entry) => {
+      syncingActivityIdsRef.current.add(entry.id)
+
+      registrarEventoPlataforma(entry, state.user)
+        .then(() => {
+          syncingActivityIdsRef.current.delete(entry.id)
+
+          if (!isCancelled) {
+            persistedActivityIdsRef.current.add(entry.id)
+          }
+        })
+        .catch((error) => {
+          syncingActivityIdsRef.current.delete(entry.id)
+          console.error('No pudimos registrar la actividad de plataforma en Firestore.', error)
+        })
+    })
+
+    return () => {
+      isCancelled = true
+    }
+  }, [state.activity, state.authReady, state.firebaseEnabled, state.user])
 
   const actions = {
     async authenticate(formData, mode) {
@@ -651,6 +956,7 @@ export function ProveedorEstadoApp({ children }) {
 
       const profileSeed = {
         name: formData.name?.trim() ?? '',
+        nickname: formData.nickname?.trim() ?? '',
         role: formData.role,
         interests: formData.interests,
         experience: formData.experience,
@@ -720,6 +1026,10 @@ export function ProveedorEstadoApp({ children }) {
       }
 
       const nextName = crearNombreCompleto(profileData.name) || stateRef.current.user.name
+      const nextNickname =
+        profileData.nickname != null
+          ? profileData.nickname.trim()
+          : (stateRef.current.user.nickname ?? '').trim()
 
       if (profileData.name != null && nextName) {
         const nameOwner = await buscarPerfilPorNombreVisible(nextName)
@@ -729,8 +1039,23 @@ export function ProveedorEstadoApp({ children }) {
         }
       }
 
+      if (profileData.nickname != null && nextNickname) {
+        const nicknameMessage = validarNickname(nextNickname)
+
+        if (nicknameMessage) {
+          throw new Error(nicknameMessage)
+        }
+
+        const nicknameOwner = await buscarPerfilPorNickname(nextNickname)
+
+        if (nicknameOwner && nicknameOwner.id !== stateRef.current.user.id) {
+          throw new Error('Ese nickname ya está en uso. Elige otro distinto.')
+        }
+      }
+
       const nextProfilePatch = {
         name: nextName,
+        nickname: nextNickname,
         role: profileData.role ?? stateRef.current.user.role ?? 'programadores',
         experience: profileData.experience ?? stateRef.current.user.experience ?? 'principiante',
         interests: profileData.interests ?? stateRef.current.user.interests ?? ['bases'],
@@ -1065,4 +1390,5 @@ export function ProveedorEstadoApp({ children }) {
     </ContextoEstadoApp.Provider>
   )
 }
+
 

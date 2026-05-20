@@ -1,7 +1,7 @@
-import {
+﻿import {
   EmailAuthProvider,
   createUserWithEmailAndPassword,
-  fetchSignInMethodsForEmail,
+  deleteUser,
   onAuthStateChanged,
   reauthenticateWithCredential,
   reload,
@@ -24,9 +24,7 @@ import {
 } from './clienteFirebase.js'
 import {
   asegurarPerfilUsuario,
-  buscarPerfilPorCorreo,
   buscarPerfilPorNombreVisible,
-  guardarPerfilUsuario,
 } from './servicioPerfilesFirebase.js'
 import {
   crearNombreCompleto,
@@ -44,7 +42,7 @@ function mapFirebaseError(error) {
     case 'auth/invalid-credential':
     case 'auth/user-not-found':
     case 'auth/wrong-password':
-      return 'No encontramos una cuenta con ese correo, o la contraseña no coincide.'
+      return 'No encontramos una cuenta con ese correo o nombre de usuario, o la contraseña no coincide.'
     case 'auth/too-many-requests':
       return 'Hay demasiados intentos seguidos. Espera un momento antes de volver a intentar.'
     case 'auth/popup-blocked':
@@ -98,8 +96,9 @@ export function consumirSemillaRedireccionGoogle() {
   }
 }
 
-function esUsuarioAdminPrivilegiado(user) {
-  return Boolean(user && (user.systemRole === 'admin' || esCorreoAdminPrivilegiado(user.email)))
+export function esUsuarioAdministrador(user) {
+  const resolvedEmail = user?.email ?? firebaseAuth?.currentUser?.email ?? ''
+  return Boolean(user?.systemRole === 'admin' || esCorreoAdminPrivilegiado(resolvedEmail))
 }
 
 export async function verificarDisponibilidadCorreo(email) {
@@ -133,69 +132,27 @@ export async function verificarDisponibilidadCorreo(email) {
     }
   }
 
-  let firestoreLookupFailed = false
-
-  try {
-    const owner = await buscarPerfilPorCorreo(normalizedEmail)
-
-    if (owner) {
-      return {
-        status: 'taken',
-        message: 'Ese correo ya está registrado. Usa otro o inicia sesión.',
-      }
-    }
-  } catch {
-    firestoreLookupFailed = true
-  }
-
-  try {
-    const methods = await fetchSignInMethodsForEmail(firebaseAuth, normalizedEmail)
-
-    if (Array.isArray(methods) && methods.length > 0) {
-      return {
-        status: 'taken',
-        message: 'Ese correo ya está registrado. Usa otro o inicia sesión.',
-      }
-    }
-
-    if (firestoreLookupFailed) {
-      return {
-        status: 'unknown',
-        message:
-          'No pudimos confirmar si ese correo ya existe. Igual lo validaremos al crear la cuenta.',
-      }
-    }
-
-    return {
-      status: 'available',
-      message: 'Correo disponible.',
-    }
-  } catch (error) {
-    if (error?.code === 'auth/invalid-email') {
-      return {
-        status: 'invalid',
-        message: 'Escribe un correo con formato válido.',
-      }
-    }
-
-    return {
-      status: 'unknown',
-      message:
-        'No pudimos confirmar si ese correo ya existe. Igual lo validaremos al crear la cuenta.',
-    }
+  return {
+    status: 'idle',
+    message: '',
   }
 }
 
 export function requiereVerificacionCorreo(user) {
+  const resolvedProvider =
+    user?.provider ??
+    (firebaseAuth?.currentUser?.providerData?.[0]?.providerId === 'google.com' ? 'google' : 'email')
+  const resolvedEmailVerified = user?.emailVerified ?? firebaseAuth?.currentUser?.emailVerified ?? false
+
   return Boolean(
     user &&
-      user.provider === 'email' &&
-      !esUsuarioAdminPrivilegiado(user) &&
-      !user.emailVerified,
+      resolvedProvider === 'email' &&
+      !esUsuarioAdministrador(user) &&
+      !resolvedEmailVerified,
   )
 }
 
-async function resolverCorreoDesdeIdentificador(identifier) {
+export async function resolverEmailIngreso(identifier) {
   const trimmedIdentifier = (identifier ?? '').trim()
 
   if (!trimmedIdentifier) {
@@ -214,27 +171,15 @@ async function resolverCorreoDesdeIdentificador(identifier) {
     )
   }
 
-  if (!owner.email) {
+  const resolvedOwnerEmail = normalizarCorreo(owner.email ?? owner.emailNormalized ?? '')
+
+  if (!resolvedOwnerEmail) {
     throw new Error(
-      'Ese nombre de usuario ya existe, pero todavía debes entrar una vez con tu correo para terminar de sincronizarlo.',
+      'Ese nombre de usuario existe, pero la cuenta todavía no tiene un correo sincronizado para iniciar sesión.',
     )
   }
 
-  return normalizarCorreo(owner.email)
-}
-
-export async function resolverEmailIngreso(identifier) {
-  const trimmedIdentifier = (identifier ?? '').trim()
-
-  if (!trimmedIdentifier) {
-    throw new Error('Escribe tu correo y tu contraseña.')
-  }
-
-  if (!esCorreoValido(trimmedIdentifier)) {
-    throw new Error('Por seguridad, el acceso con contraseña ahora se hace solo con correo.')
-  }
-
-  return normalizarCorreo(trimmedIdentifier)
+  return resolvedOwnerEmail
 }
 
 async function sincronizarUltimoAcceso(user, seed = {}) {
@@ -249,11 +194,6 @@ async function sincronizarUltimoAcceso(user, seed = {}) {
     await signOut(firebaseAuth)
     throw new Error('Esta cuenta está deshabilitada. Reactívala desde administración.')
   }
-
-  await guardarPerfilUsuario(user.uid, {
-    emailVerified: user.emailVerified,
-    lastLoginAt: now,
-  })
 
   return {
     firebaseUser: firebaseAuth.currentUser ?? user,
@@ -270,6 +210,7 @@ export async function registrarCuentaConCorreo(formData, profileSeed = {}) {
 
   const email = normalizarCorreo(formData.email ?? '')
   const passwordMessage = obtenerMensajeContrasenaMinima(formData.password)
+  let credential = null
 
   if (passwordMessage) {
     throw new Error(passwordMessage)
@@ -282,15 +223,11 @@ export async function registrarCuentaConCorreo(formData, profileSeed = {}) {
   }
 
   try {
-    const credential = await createUserWithEmailAndPassword(firebaseAuth, email, formData.password)
+    credential = await createUserWithEmailAndPassword(firebaseAuth, email, formData.password)
     const displayName = crearNombreCompleto(formData.name)
 
     if (displayName) {
       await updateProfile(credential.user, { displayName })
-    }
-
-    if (!esCorreoAdminPrivilegiado(email)) {
-      await sendEmailVerification(credential.user, obtenerActionCodeSettings('/login'))
     }
 
     const session = await sincronizarUltimoAcceso(credential.user, {
@@ -299,11 +236,27 @@ export async function registrarCuentaConCorreo(formData, profileSeed = {}) {
       createdAt: new Date().toISOString(),
     })
 
+    if (!esCorreoAdminPrivilegiado(email)) {
+      try {
+        await sendEmailVerification(credential.user, obtenerActionCodeSettings('/login'))
+      } catch (error) {
+        console.error('No pudimos enviar el correo inicial de verificación.', error)
+      }
+    }
+
     return {
       ...session,
       activityType: 'register',
     }
   } catch (error) {
+    if (credential?.user) {
+      try {
+        await deleteUser(credential.user)
+      } catch (cleanupError) {
+        console.error('No pudimos revertir la cuenta creada tras un fallo de registro.', cleanupError)
+      }
+    }
+
     throw createFirebaseError(error)
   }
 }
@@ -312,13 +265,20 @@ export async function iniciarSesionConCorreoONickname(formData) {
   asegurarFirebaseConfigurado()
 
   try {
-    const resolvedEmail = await resolverCorreoDesdeIdentificador(formData.identifier)
+    const resolvedEmail = await resolverEmailIngreso(formData.identifier)
     const credential = await signInWithEmailAndPassword(
       firebaseAuth,
       resolvedEmail,
       formData.password ?? '',
     )
-    const session = await sincronizarUltimoAcceso(credential.user)
+    let session
+
+    try {
+      session = await sincronizarUltimoAcceso(credential.user)
+    } catch (error) {
+      await signOut(firebaseAuth)
+      throw error
+    }
 
     return {
       ...session,
@@ -345,7 +305,14 @@ export async function iniciarSesionConGoogle(profileSeed = {}) {
 
   try {
     const result = await signInWithPopup(firebaseAuth, googleAuthProvider)
-    const session = await sincronizarUltimoAcceso(result.user, profileSeed)
+    let session
+
+    try {
+      session = await sincronizarUltimoAcceso(result.user, profileSeed)
+    } catch (error) {
+      await signOut(firebaseAuth)
+      throw error
+    }
 
     return {
       ...session,
@@ -389,6 +356,10 @@ export async function enviarCorreoRecuperacion(email) {
       obtenerActionCodeSettings('/login'),
     )
   } catch (error) {
+    if (error?.code === 'auth/user-not-found') {
+      return
+    }
+
     throw createFirebaseError(error)
   }
 }
@@ -460,3 +431,4 @@ export function suscribirSesionFirebase(onSessionChange, onError) {
 
   return onAuthStateChanged(firebaseAuth, onSessionChange, onError)
 }
+

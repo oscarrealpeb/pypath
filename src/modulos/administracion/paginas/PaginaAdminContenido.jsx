@@ -1,4 +1,4 @@
-import { startTransition, useMemo, useState } from 'react'
+import { startTransition, useEffect, useMemo, useState } from 'react'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import {
@@ -11,14 +11,6 @@ import {
   permiteRuntimePython,
 } from '../servicios/servicioAdminContenido.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
-
-function getStatusOptions() {
-  return [
-    { value: 'draft', label: 'Borrador' },
-    { value: 'live', label: 'Disponible ahora' },
-    { value: 'soon', label: 'En cola' },
-  ]
-}
 
 function findCourse(content, courseId) {
   return content.cursos.find((course) => course.id === courseId) ?? null
@@ -115,6 +107,17 @@ function TextareaField({
   )
 }
 
+function formatearHoraSincronizacion(timestamp) {
+  if (!timestamp) {
+    return ''
+  }
+
+  return new Intl.DateTimeFormat('es-CO', {
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(timestamp))
+}
+
 function GuiaRapidaCms() {
   return (
     <Tarjeta className="space-y-4">
@@ -158,8 +161,20 @@ function GuiaRapidaCms() {
   )
 }
 
-function CourseEditor({ course, meta, onSave, onTogglePublication, onDeleteCourse }) {
+function CourseEditor({
+  course,
+  meta,
+  isEditable,
+  isSyncing,
+  isTransitioningToDraft,
+  pendingAction,
+  onSaveDraft,
+  onPublishCourse,
+  onMoveToDraft,
+  onDeleteCourse,
+}) {
   const [draft, setDraft] = useState(() => construirBorradorCurso(course, meta))
+  const publicationLabel = meta.statusLabel?.trim() || 'Sin estado'
 
   return (
     <Tarjeta className="space-y-5">
@@ -170,19 +185,52 @@ function CourseEditor({ course, meta, onSave, onTogglePublication, onDeleteCours
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Boton variant="secondary" onClick={() => onSave(draft)}>
-            Guardar curso
-          </Boton>
-          <Boton onClick={onTogglePublication}>
-            {meta.status === 'live' ? 'Pasar a borrador' : 'Publicar curso'}
-          </Boton>
-          <Boton variant="ghost" onClick={onDeleteCourse}>
+          {isEditable ? (
+            <>
+              <Boton
+                variant="secondary"
+                disabled={isSyncing}
+                onClick={() => onSaveDraft(draft)}
+              >
+                {isSyncing && pendingAction === 'save' ? 'Guardando...' : 'Guardar borrador'}
+              </Boton>
+              <Boton disabled={isSyncing} onClick={() => onPublishCourse(draft)}>
+                {isSyncing && pendingAction === 'publish' ? 'Publicando...' : 'Publicar curso'}
+              </Boton>
+            </>
+          ) : (
+            <Boton disabled={isSyncing} onClick={onMoveToDraft}>
+              {isSyncing && pendingAction === 'unpublish' ? 'Moviendo...' : 'Pasar a borrador'}
+            </Boton>
+          )}
+          <Boton variant="ghost" disabled={!isEditable || isSyncing} onClick={onDeleteCourse}>
             Eliminar curso
           </Boton>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="rounded-2xl border border-border/80 bg-white/5 p-4 text-sm text-mute">
+        <p className="font-semibold text-foam">Qué hace cada acción</p>
+        <p className="mt-2 leading-6">
+          Guardar borrador conserva los cambios sin abrir el curso al alumnado. Publicar curso
+          guarda este formulario y lo deja visible para estudiantes. Si el curso ya está publicado
+          o en cola, primero debes pasarlo a borrador para volver a editarlo.
+        </p>
+      </div>
+
+      <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
+        <p className="text-xs uppercase tracking-[0.22em] text-mute">Estado actual</p>
+        <p className="mt-3 text-sm font-semibold text-foam">{publicationLabel}</p>
+        <p className="mt-2 text-sm leading-6 text-mute">
+          {isTransitioningToDraft
+            ? 'Estamos moviendo este curso a borrador. En cuanto Firestore confirme el cambio, el editor se habilita solo.'
+            : isEditable
+            ? 'Este curso está en borrador. Puedes editarlo, guardar cambios y publicarlo cuando esté listo.'
+            : 'Este curso no está en borrador. Para editarlo de nuevo, pásalo primero a borrador.'}
+        </p>
+      </div>
+
+      <fieldset disabled={!isEditable || isSyncing} className="grid gap-4 lg:grid-cols-2">
         <InputField
           label="Título"
           value={draft.title}
@@ -242,39 +290,6 @@ function CourseEditor({ course, meta, onSave, onTogglePublication, onDeleteCours
           value={draft.intensity}
           onChange={(event) =>
             setDraft((current) => ({ ...current, intensity: event.target.value }))
-          }
-        />
-        <label className="block space-y-2">
-          <FieldLabel
-            label="Estado"
-            help={{
-              title: 'Estado del curso',
-              body:
-                'Borrador lo deja editable sin tratarlo como listo. Disponible ahora lo publica. En cola sirve para mostrarlo como próximo.',
-            }}
-          />
-          <select
-            className="field-input"
-            value={draft.status}
-            onChange={(event) => setDraft((current) => ({ ...current, status: event.target.value }))}
-          >
-            {getStatusOptions().map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <InputField
-          label="Etiqueta de estado"
-          value={draft.statusLabel}
-          help={{
-            title: 'Etiqueta de estado',
-            body:
-              'Texto visible en la tarjeta del catálogo. Ejemplos: Borrador, Disponible ahora, En cola o Próximamente.',
-          }}
-          onChange={(event) =>
-            setDraft((current) => ({ ...current, statusLabel: event.target.value }))
           }
         />
         <InputField
@@ -380,12 +395,21 @@ function CourseEditor({ course, meta, onSave, onTogglePublication, onDeleteCours
           }}
           onChange={(event) => setDraft((current) => ({ ...current, pitch: event.target.value }))}
         />
-      </div>
+      </fieldset>
     </Tarjeta>
   )
 }
 
-function UnitEditor({ content, courseId, unit, assessment, onReplaceContent, onDelete }) {
+function UnitEditor({
+  content,
+  courseId,
+  unit,
+  assessment,
+  isEditable,
+  isSyncing,
+  onReplaceContent,
+  onDelete,
+}) {
   const [unitDraft, setUnitDraft] = useState({
     title: unit.title,
     summary: unit.summary,
@@ -416,16 +440,16 @@ function UnitEditor({ content, courseId, unit, assessment, onReplaceContent, onD
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Boton variant="secondary" onClick={handleSave}>
+          <Boton variant="secondary" disabled={!isEditable || isSyncing} onClick={handleSave}>
             Guardar unidad
           </Boton>
-          <Boton variant="ghost" onClick={onDelete}>
+          <Boton variant="ghost" disabled={!isEditable || isSyncing} onClick={onDelete}>
             Eliminar unidad
           </Boton>
         </div>
       </div>
 
-      <div className="grid gap-4">
+      <fieldset disabled={!isEditable || isSyncing} className="grid gap-4">
         <InputField
           label="Título de la unidad"
           value={unitDraft.title}
@@ -441,9 +465,12 @@ function UnitEditor({ content, courseId, unit, assessment, onReplaceContent, onD
             setUnitDraft((current) => ({ ...current, summary: event.target.value }))
           }
         />
-      </div>
+      </fieldset>
 
-      <div className="rounded-3xl border border-border/80 bg-white/5 p-5">
+      <fieldset
+        disabled={!isEditable || isSyncing}
+        className="rounded-3xl border border-border/80 bg-white/5 p-5"
+      >
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
@@ -510,12 +537,21 @@ function UnitEditor({ content, courseId, unit, assessment, onReplaceContent, onD
             hint="Usa un arreglo con `id`, `prompt`, `options`, `correctOptionId` y `explanation`. Si el JSON es inválido, se conserva la versión anterior."
           />
         </div>
-      </div>
+      </fieldset>
     </Tarjeta>
   )
 }
 
-function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) {
+function LessonEditor({
+  courseId,
+  unitId,
+  lesson,
+  isEditable,
+  isSyncing,
+  onSave,
+  onDelete,
+  onStatus,
+}) {
   const [draft, setDraft] = useState(() => construirBorradorLeccion(lesson))
   const supportsPythonRuntime = permiteRuntimePython(courseId)
   const visibleRuntimeMode = supportsPythonRuntime ? draft.runtimeMode : 'guided'
@@ -526,6 +562,10 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
   }
 
   function handleImageUpload(event) {
+    if (!isEditable || isSyncing) {
+      return
+    }
+
     const file = event.target.files?.[0]
 
     if (!file) {
@@ -551,16 +591,20 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Boton variant="secondary" onClick={() => onSave(courseId, unitId, lesson.id, draft)}>
+          <Boton
+            variant="secondary"
+            disabled={!isEditable || isSyncing}
+            onClick={() => onSave(courseId, unitId, lesson.id, draft)}
+          >
             Guardar lección
           </Boton>
-          <Boton variant="ghost" onClick={onDelete}>
+          <Boton variant="ghost" disabled={!isEditable || isSyncing} onClick={onDelete}>
             Eliminar lección
           </Boton>
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <fieldset disabled={!isEditable || isSyncing} className="grid gap-4 lg:grid-cols-2">
         <InputField
           label="Título"
           value={draft.title}
@@ -595,7 +639,7 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
           </select>
           <p className="text-xs leading-6 text-mute">
             {supportsPythonRuntime
-              ? 'Este curso si puede ejecutar Python real en el navegador.'
+              ? 'Este curso sí puede ejecutar Python real en el navegador.'
               : 'Este curso se mantiene en modo guiado para seguir compatible con la plantilla actual.'}
           </p>
         </label>
@@ -606,9 +650,12 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
           value={draft.objective}
           onChange={(event) => setDraftField('objective', event.target.value)}
         />
-      </div>
+      </fieldset>
 
-      <div className="rounded-3xl border border-border/80 bg-white/5 p-5">
+      <fieldset
+        disabled={!isEditable || isSyncing}
+        className="rounded-3xl border border-border/80 bg-white/5 p-5"
+      >
         <div className="space-y-4">
           <div>
             <p className="eyebrow">Video y apoyo</p>
@@ -691,9 +738,12 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
             />
           </div>
         </div>
-      </div>
+      </fieldset>
 
-      <div className="rounded-3xl border border-border/80 bg-white/5 p-5">
+      <fieldset
+        disabled={!isEditable || isSyncing}
+        className="rounded-3xl border border-border/80 bg-white/5 p-5"
+      >
         <div className="space-y-4">
           <div>
             <p className="eyebrow">Instrucciones</p>
@@ -735,9 +785,12 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
             hint="Si lo dejas vacío, la lección usa el orden legado. Puedes usar `video`, `note`, `documentation`, `example`, `blocks` o un objeto `block` con `blockId` o `blockIndex`."
           />
         </div>
-      </div>
+      </fieldset>
 
-      <div className="rounded-3xl border border-border/80 bg-white/5 p-5">
+      <fieldset
+        disabled={!isEditable || isSyncing}
+        className="rounded-3xl border border-border/80 bg-white/5 p-5"
+      >
         <div className="space-y-4">
           <div>
             <p className="eyebrow">Reto</p>
@@ -872,12 +925,12 @@ function LessonEditor({ courseId, unitId, lesson, onSave, onDelete, onStatus }) 
             </div>
           )}
         </div>
-      </div>
+      </fieldset>
     </Tarjeta>
   )
 }
 
-function FinalAssessmentEditor({ assessment, onSave }) {
+function FinalAssessmentEditor({ assessment, isEditable, isSyncing, onSave }) {
   const [draft, setDraft] = useState(() => construirBorradorEvaluacion(assessment))
 
   return (
@@ -887,12 +940,12 @@ function FinalAssessmentEditor({ assessment, onSave }) {
           <p className="eyebrow">Evaluación final</p>
           <h2 className="mt-4 font-display text-2xl font-semibold text-foam">Cierre del curso</h2>
         </div>
-        <Boton variant="secondary" onClick={() => onSave(draft)}>
+        <Boton variant="secondary" disabled={!isEditable || isSyncing} onClick={() => onSave(draft)}>
           Guardar evaluación final
         </Boton>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <fieldset disabled={!isEditable || isSyncing} className="grid gap-4 lg:grid-cols-2">
         <InputField
           className="lg:col-span-2"
           label="Título"
@@ -940,7 +993,7 @@ function FinalAssessmentEditor({ assessment, onSave }) {
           }
           hint="Usa el mismo esquema de preguntas que vive en `src/datos/cursos/*/evaluaciones.js`."
         />
-      </div>
+      </fieldset>
     </Tarjeta>
   )
 }
@@ -988,7 +1041,7 @@ function CoursePendingState({
 }
 
 export function PaginaAdminContenido() {
-  const { content } = useEstadoApp()
+  const { content, cmsSync } = useEstadoApp()
   const {
     createCourse,
     createLesson,
@@ -997,7 +1050,6 @@ export function PaginaAdminContenido() {
     deleteLesson,
     deleteUnit,
     replaceContent,
-    toggleCoursePublication,
     updateCourse,
     updateFinalAssessment,
     updateLesson,
@@ -1010,6 +1062,7 @@ export function PaginaAdminContenido() {
   const [newUnitName, setNewUnitName] = useState('')
   const [newLessonName, setNewLessonName] = useState('')
   const [statusMessage, setStatusMessage] = useState('')
+  const [pendingCourseAction, setPendingCourseAction] = useState('')
 
   const orderedCatalog = useMemo(
     () =>
@@ -1042,6 +1095,44 @@ export function PaginaAdminContenido() {
   const selectedUnitAssessment =
     content.evaluacionesCursos[effectiveCourseId]?.unitAssessments?.[effectiveUnitId] ?? null
   const selectedFinalAssessment = content.evaluacionesCursos[effectiveCourseId]?.finalAssessment ?? null
+  const isHydratingCms = cmsSync.status === 'loading'
+  const isSyncingCms = cmsSync.status === 'saving' || isHydratingCms
+  const isTransitioningToDraft = pendingCourseAction === 'unpublish'
+  const isCourseEditable = selectedMeta?.status === 'draft' && !isTransitioningToDraft
+  const cmsSyncMessage =
+    cmsSync.status === 'saved' && cmsSync.lastSavedAt
+      ? `${cmsSync.message} Última confirmación: ${formatearHoraSincronizacion(cmsSync.lastSavedAt)}.`
+      : cmsSync.message
+  const cmsSyncToneClass =
+    cmsSync.status === 'error'
+      ? 'border-danger/30 bg-danger/10 text-red-100'
+      : cmsSync.status === 'saving'
+        ? 'border-warning/30 bg-warning/10 text-foam'
+        : 'border-primary/25 bg-primary/10 text-foam'
+
+  useEffect(() => {
+    if (!pendingCourseAction) {
+      return undefined
+    }
+
+    const syncResolved = cmsSync.status === 'saved' || cmsSync.status === 'error'
+    const courseReadyForDraft =
+      pendingCourseAction !== 'unpublish' || selectedMeta?.status === 'draft'
+
+    if (!syncResolved || !courseReadyForDraft) {
+      return undefined
+    }
+
+    const timerId = window.setTimeout(() => {
+      if (cmsSync.status === 'saved' && pendingCourseAction === 'unpublish') {
+        setStatusMessage('Curso listo para editarse en borrador.')
+      }
+
+      setPendingCourseAction('')
+    }, 0)
+
+    return () => window.clearTimeout(timerId)
+  }, [cmsSync.status, pendingCourseAction, selectedMeta?.status])
 
   function handleCreateCourse() {
     if (!newCourseName.trim()) {
@@ -1053,6 +1144,7 @@ export function PaginaAdminContenido() {
     setSelectedUnitId(null)
     setSelectedLessonId(null)
     setNewCourseName('')
+    setPendingCourseAction('')
     setStatusMessage('Curso creado. Ya puedes editarlo y publicarlo.')
   }
 
@@ -1073,6 +1165,7 @@ export function PaginaAdminContenido() {
     })
     setSelectedUnitId(null)
     setSelectedLessonId(null)
+    setPendingCourseAction('')
 
     if (mode === 'code') {
       setStatusMessage('Curso importado desde su borrador en código y listo para editarse en el CMS.')
@@ -1088,7 +1181,7 @@ export function PaginaAdminContenido() {
   }
 
   function handleCreateUnit() {
-    if (!effectiveCourseId || !newUnitName.trim()) {
+    if (!effectiveCourseId || !isCourseEditable || !newUnitName.trim()) {
       return
     }
 
@@ -1100,7 +1193,7 @@ export function PaginaAdminContenido() {
   }
 
   function handleCreateLesson() {
-    if (!effectiveCourseId || !effectiveUnitId || !newLessonName.trim()) {
+    if (!effectiveCourseId || !effectiveUnitId || !isCourseEditable || !newLessonName.trim()) {
       return
     }
 
@@ -1129,7 +1222,42 @@ export function PaginaAdminContenido() {
     setSelectedCourseId(null)
     setSelectedUnitId(null)
     setSelectedLessonId(null)
+    setPendingCourseAction('')
     setStatusMessage('Curso eliminado del CMS local.')
+  }
+
+  function handleSaveCourseDraft(draft) {
+    updateCourse(effectiveCourseId, {
+      ...draft,
+      status: 'draft',
+      statusLabel: 'Borrador',
+    })
+    setPendingCourseAction('save')
+    setStatusMessage('Borrador actualizado. Esperando confirmación de Firestore...')
+  }
+
+  function handlePublishCourse(draft) {
+    updateCourse(effectiveCourseId, {
+      ...draft,
+      status: 'live',
+      statusLabel: 'Disponible ahora',
+    })
+    setPendingCourseAction('publish')
+    setStatusMessage('Publicando curso. Quedará visible cuando Firestore confirme el cambio.')
+  }
+
+  function handleMoveCourseToDraft() {
+    if (!selectedCourse || !selectedMeta) {
+      return
+    }
+
+    updateCourse(effectiveCourseId, {
+      ...construirBorradorCurso(selectedCourse, selectedMeta),
+      status: 'draft',
+      statusLabel: 'Borrador',
+    })
+    setPendingCourseAction('unpublish')
+    setStatusMessage('Curso enviado a borrador. Al confirmarse la sincronización dejará de estar público.')
   }
 
   if (!selectedMeta && orderedCatalog.length === 0) {
@@ -1188,6 +1316,12 @@ export function PaginaAdminContenido() {
         </div>
       )}
 
+      {cmsSyncMessage ? (
+        <div className={`rounded-2xl border px-4 py-3 text-sm ${cmsSyncToneClass}`}>
+          {cmsSyncMessage}
+        </div>
+      ) : null}
+
       <GuiaRapidaCms />
 
       <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
@@ -1209,7 +1343,9 @@ export function PaginaAdminContenido() {
               placeholder="Nuevo curso: Flask, NumPy, etc."
               onChange={(event) => setNewCourseName(event.target.value)}
             />
-            <Boton onClick={handleCreateCourse}>Crear curso</Boton>
+            <Boton disabled={isSyncingCms} onClick={handleCreateCourse}>
+              Crear curso
+            </Boton>
           </div>
 
           <div className="grid gap-3">
@@ -1230,6 +1366,7 @@ export function PaginaAdminContenido() {
                     setSelectedCourseId(course.id)
                     setSelectedUnitId(null)
                     setSelectedLessonId(null)
+                    setPendingCourseAction('')
                   }}
                 >
                   <div className="flex flex-wrap items-center gap-2">
@@ -1253,23 +1390,18 @@ export function PaginaAdminContenido() {
 
         {selectedCourse && selectedMeta ? (
           <CourseEditor
-          key={effectiveCourseId}
-          course={selectedCourse}
-          meta={selectedMeta}
-          onSave={(draft) => {
-            updateCourse(effectiveCourseId, draft)
-            setStatusMessage('Curso actualizado en el CMS local.')
-          }}
-          onTogglePublication={() => {
-            toggleCoursePublication(effectiveCourseId)
-            setStatusMessage(
-              selectedMeta.status === 'live'
-                ? 'Curso movido a borrador.'
-                : 'Curso publicado en el catálogo.',
-            )
-          }}
-          onDeleteCourse={handleDeleteCourse}
-        />
+            key={`${effectiveCourseId}-${selectedMeta?.status ?? 'sin-estado'}`}
+            course={selectedCourse}
+            meta={selectedMeta}
+            isEditable={isCourseEditable}
+            isSyncing={isSyncingCms}
+            isTransitioningToDraft={isTransitioningToDraft}
+            pendingAction={pendingCourseAction}
+            onSaveDraft={handleSaveCourseDraft}
+            onPublishCourse={handlePublishCourse}
+            onMoveToDraft={handleMoveCourseToDraft}
+            onDeleteCourse={handleDeleteCourse}
+          />
         ) : (
           <CoursePendingState
             courseId={effectiveCourseId}
@@ -1283,6 +1415,15 @@ export function PaginaAdminContenido() {
 
       {selectedCourse ? (
         <>
+      {isTransitioningToDraft ? (
+        <div className="rounded-2xl border border-primary/25 bg-primary/10 px-4 py-3 text-sm text-foam">
+          Preparando el borrador del curso. Espera la confirmación de Firestore antes de editar unidades, lecciones o evaluaciones.
+        </div>
+      ) : !isCourseEditable ? (
+        <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-foam">
+          Este curso está fuera de borrador. Para editar unidades, lecciones o evaluaciones, primero pásalo a borrador.
+        </div>
+      ) : null}
       <div className="grid gap-6 xl:grid-cols-[0.92fr_1.08fr]">
         <Tarjeta className="space-y-5">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -1302,7 +1443,9 @@ export function PaginaAdminContenido() {
               placeholder="Nombre de la nueva unidad"
               onChange={(event) => setNewUnitName(event.target.value)}
             />
-            <Boton onClick={handleCreateUnit}>Crear unidad</Boton>
+            <Boton disabled={!isCourseEditable || isSyncingCms} onClick={handleCreateUnit}>
+              Crear unidad
+            </Boton>
           </div>
 
           <div className="grid gap-3">
@@ -1337,9 +1480,11 @@ export function PaginaAdminContenido() {
             courseId={effectiveCourseId}
             unit={selectedUnit}
             assessment={selectedUnitAssessment}
+            isEditable={isCourseEditable}
+            isSyncing={isSyncingCms}
             onReplaceContent={(nextContent, meta) => {
               replaceContent(nextContent, meta)
-              setStatusMessage('Unidad y evaluación de unidad actualizadas.')
+              setStatusMessage('Unidad actualizada. Esperando confirmación de Firestore...')
             }}
             onDelete={() => {
               deleteUnit(effectiveCourseId, effectiveUnitId)
@@ -1374,7 +1519,9 @@ export function PaginaAdminContenido() {
               placeholder="Nombre de la nueva lección"
               onChange={(event) => setNewLessonName(event.target.value)}
             />
-            <Boton onClick={handleCreateLesson}>Crear lección</Boton>
+            <Boton disabled={!isCourseEditable || isSyncingCms} onClick={handleCreateLesson}>
+              Crear lección
+            </Boton>
           </div>
 
           <div className="grid gap-3">
@@ -1405,9 +1552,11 @@ export function PaginaAdminContenido() {
             courseId={effectiveCourseId}
             unitId={effectiveUnitId}
             lesson={selectedLesson}
+            isEditable={isCourseEditable}
+            isSyncing={isSyncingCms}
             onSave={(courseId, unitId, lessonId, draft) => {
               updateLesson(courseId, unitId, lessonId, draft)
-              setStatusMessage('Lección guardada con su contenido y reto.')
+              setStatusMessage('Lección guardada. Esperando confirmación de Firestore...')
             }}
             onDelete={() => {
               deleteLesson(effectiveCourseId, effectiveUnitId, effectiveLessonId)
@@ -1427,9 +1576,11 @@ export function PaginaAdminContenido() {
         <FinalAssessmentEditor
           key={`${effectiveCourseId}-final`}
           assessment={selectedFinalAssessment}
+          isEditable={isCourseEditable}
+          isSyncing={isSyncingCms}
           onSave={(draft) => {
             updateFinalAssessment(effectiveCourseId, draft)
-            setStatusMessage('Evaluación final actualizada.')
+            setStatusMessage('Evaluación final actualizada. Esperando confirmación de Firestore...')
           }}
         />
       )}

@@ -1,14 +1,10 @@
 import { Navigate, Outlet } from 'react-router-dom'
 import { PantallaCargandoAutenticacion } from '../componentes/PantallaCargandoAutenticacion.jsx'
-import {
-  esCorreoAdminPrivilegiado,
-  firebaseAuth,
-} from '../modulos/autenticacion/servicios/clienteFirebase.js'
+import { esUsuarioAdministrador } from '../modulos/autenticacion/servicios/servicioFirebaseAutenticacion.js'
 import { useEstadoApp } from '../modulos/progreso/contexto/useEstadoApp.js'
 
 export function RutaAdministrador() {
   const { authReady, user } = useEstadoApp()
-  const resolvedSessionEmail = user?.email ?? firebaseAuth?.currentUser?.email ?? ''
 
   if (!authReady) {
     return <PantallaCargandoAutenticacion />
@@ -18,7 +14,7 @@ export function RutaAdministrador() {
     return <Navigate to="/control" replace />
   }
 
-  if (!esCorreoAdminPrivilegiado(resolvedSessionEmail)) {
+  if (!esUsuarioAdministrador(user)) {
     return <Navigate to="/dashboard" replace />
   }
 

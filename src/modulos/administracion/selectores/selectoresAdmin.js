@@ -31,6 +31,11 @@ function resolverTituloCurso(courseId, courseTitles) {
   return courseTitles[courseId] ?? courseId ?? 'Curso sin identificar'
 }
 
+function obtenerTiempoEvento(event) {
+  const timestamp = new Date(event?.timestamp ?? 0).getTime()
+  return Number.isFinite(timestamp) ? timestamp : 0
+}
+
 function formatearEvento(event, courseTitles) {
   const eventLabels = {
     register: 'Cuenta creada',
@@ -64,6 +69,12 @@ function formatearEvento(event, courseTitles) {
   }
 
   const details = []
+
+  if (event.actor?.name) {
+    details.push(`Usuario: ${event.actor.name}`)
+  } else if (event.actor?.email) {
+    details.push(`Usuario: ${event.actor.email}`)
+  }
 
   if (event.courseId) {
     details.push(`Curso: ${resolverTituloCurso(event.courseId, courseTitles)}`)
@@ -175,6 +186,9 @@ export function obtenerMetricasAdmin(users = [], userStates = {}, activity = [])
     learnerUsers: users.length - adminUsers.length,
     usersWithRecentActivity: recentUsers.length,
     coursePopularity,
-    recentEvents: activity.slice(-8).reverse().map((event) => formatearEvento(event, courseTitles)),
+    recentEvents: [...activity]
+      .sort((left, right) => obtenerTiempoEvento(right) - obtenerTiempoEvento(left))
+      .slice(0, 8)
+      .map((event) => formatearEvento(event, courseTitles)),
   }
 }

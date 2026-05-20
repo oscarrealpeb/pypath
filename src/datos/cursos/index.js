@@ -1,13 +1,13 @@
-// Punto de union del contenido academico.
+// Punto de unión del contenido académico.
 // Cada carpeta representa un curso y concentra:
 // - `curso.js`: unidades, lecciones, recursos y retos
-// - `catalogo.js`: como se muestra el curso en home/panel/catalogo
-// - `evaluaciones.js`: checkpoints por unidad y evaluacion final
+// - `catalogo.js`: cómo se muestra el curso en home/panel/catálogo
+// - `evaluaciones.js`: checkpoints por unidad y evaluación final
 //
-// Regla practica para el equipo:
+// Regla práctica para el equipo:
 // 1. cada persona trabaja dentro de la carpeta de su curso
-// 2. al terminar, registra aqui los imports necesarios
-// 3. si el curso aun es borrador, puedes dejar solo su catalogo
+// 2. al terminar, registra aquí los imports necesarios
+// 3. si el curso aún es borrador, puedes dejar solo su catálogo
 
 import {
   catalogoFundamentosPython,
@@ -21,7 +21,11 @@ import {
 } from './pandasFinanzas/index.js'
 import { catalogoPygame, cursoPygame, evaluacionesPygame } from './pygame/index.js'
 import { catalogoPySide6, cursoPySide6, evaluacionesPySide6 } from './pyside6/index.js'
-import { catalogoPythonCiberseguridad } from './pythonCiberseguridad/index.js'
+import {
+  catalogoPythonCiberseguridad,
+  cursoPythonCiberseguridad,
+  evaluacionesPythonCiberseguridad,
+} from './pythonCiberseguridad/index.js'
 
 export const cursos = [
   cursoFundamentosPython,
@@ -46,4 +50,9 @@ export const evaluacionesCursos = {
 }
 
 export const cursosBorrador = {
+  'python-ciberseguridad': {
+    course: cursoPythonCiberseguridad,
+    catalog: catalogoPythonCiberseguridad,
+    assessments: evaluacionesPythonCiberseguridad,
+  },
 }

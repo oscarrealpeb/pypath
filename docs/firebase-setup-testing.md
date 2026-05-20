@@ -69,7 +69,10 @@ Variables esperadas:
 - `VITE_FIREBASE_MESSAGING_SENDER_ID`
 - `VITE_FIREBASE_APP_ID`
 - `VITE_FIREBASE_MEASUREMENT_ID`
-- `VITE_FIREBASE_ADMIN_EMAILS=admin@pypath.com`
+
+La cuenta bootstrap de administración sigue siendo fija:
+
+- `admin@pypath.com`
 
 ## 5. Matriz corta de pruebas
 
@@ -102,7 +105,7 @@ Variables esperadas:
 
 ### HU23
 
-1. entra a `/admin/content`
+1. entra a `/admin/contenido`
 2. crea un curso
 3. crea una unidad
 4. crea una lección
@@ -114,7 +117,7 @@ Variables esperadas:
 
 ## 6. Limitación actual
 
-El CMS ya persiste a Firestore, pero sigue guardando un snapshot completo del contenido en un solo documento. Para testing funciona bien. El siguiente salto natural será:
+El CMS ya persiste a Firestore, pero sigue guardando un snapshot completo del contenido en un solo documento. Para pruebas funciona bien. El siguiente salto natural será:
 
 - mover imágenes a Firebase Storage
 - dividir el CMS por curso o por secciones
@@ -128,4 +131,4 @@ En esta fase:
 - puede reenviar el correo de verificación
 - la cuenta no se borra automáticamente
 
-No estamos usando limpieza automática de cuentas no verificadas porque eso nos llevaría a servicios adicionales que por ahora no hacen falta para testing.
+No estamos usando limpieza automática de cuentas no verificadas porque eso nos llevaría a servicios adicionales que por ahora no hacen falta para pruebas.

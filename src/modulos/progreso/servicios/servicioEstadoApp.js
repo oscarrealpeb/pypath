@@ -14,6 +14,14 @@ const STORAGE_KEY = 'pypath-app-state'
 
 export { crearEstadoDiagnosticoInicial, crearEstadoUsuarioInicial, crearProgresoInicial }
 
+export function crearEstadoSincronizacionCms() {
+  return {
+    status: estaFirebaseConfigurado() ? 'loading' : 'idle',
+    message: '',
+    lastSavedAt: null,
+  }
+}
+
 export function crearEstadoInicial() {
   return {
     themePreference: 'system',
@@ -26,6 +34,7 @@ export function crearEstadoInicial() {
     progress: crearProgresoInicial(),
     content: crearContenidoInicial(),
     activity: [],
+    cmsSync: crearEstadoSincronizacionCms(),
   }
 }
 
@@ -49,8 +58,18 @@ function normalizeState(state) {
       evaluacionesCursos:
         state?.content?.evaluacionesCursos ?? initialState.content.evaluacionesCursos,
       cursosBorrador: initialState.content.cursosBorrador,
+      cursosGestionadosCms:
+        state?.content?.cursosGestionadosCms ?? initialState.content.cursosGestionadosCms,
+      catalogosGestionadosCms:
+        state?.content?.catalogosGestionadosCms ?? initialState.content.catalogosGestionadosCms,
+      evaluacionesGestionadasCms:
+        state?.content?.evaluacionesGestionadasCms ??
+        initialState.content.evaluacionesGestionadasCms,
+      cursosEliminadosCms:
+        state?.content?.cursosEliminadosCms ?? initialState.content.cursosEliminadosCms,
     },
-    activity: Array.isArray(state?.activity) ? state.activity : [],
+    activity: [],
+    cmsSync: crearEstadoSincronizacionCms(),
   }
 
   actualizarSnapshotContenido(normalizedState.content)
@@ -68,10 +87,8 @@ export function cargarEstadoApp() {
 }
 
 export function guardarEstadoApp(state) {
-  actualizarSnapshotContenido(state.content)
   guardarAlmacenamiento(STORAGE_KEY, {
     themePreference: state.themePreference,
     content: state.content,
-    activity: state.activity,
   })
 }

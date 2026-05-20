@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react'
+﻿import { startTransition, useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { MensajeValidacionCampo } from '../../../componentes/MensajeValidacionCampo.jsx'
@@ -12,11 +12,13 @@ import {
   sanearSeleccionIntereses,
 } from '../../../datos/opcionesPerfilUsuario.js'
 import {
+  verificarDisponibilidadNickname,
   verificarDisponibilidadNombreVisible,
 } from '../../autenticacion/servicios/servicioPerfilesFirebase.js'
 import {
   crearNombreCompleto,
   obtenerMensajeContrasenaMinima,
+  validarNickname,
   validarNombreVisible,
 } from '../../autenticacion/servicios/servicioValidacionAutenticacion.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
@@ -28,18 +30,26 @@ import {
   obtenerPerfilLegible,
 } from '../servicios/servicioResumenPerfil.js'
 
+function crearEstadoFormularioPerfil(user) {
+  return {
+    name: user?.name ?? '',
+    nickname: user?.nickname ?? '',
+    role: user?.role ?? 'programadores',
+    experience: user?.experience ?? 'principiante',
+    interests: sanearSeleccionIntereses(user?.interests ?? ['bases']),
+    goalCourseId: user?.goalCourseId ?? '',
+  }
+}
+
+
 export function PaginaPerfil() {
   const navigate = useNavigate()
   const { user, progress, onboarding } = useEstadoApp()
   const { updateUserProfile, updateCurrentUserPassword } = useAccionesApp()
   const catalogoCursos = obtenerCatalogoCursos()
-  const [formState, setFormState] = useState({
-    name: user?.name ?? '',
-    role: user?.role ?? 'programadores',
-    experience: user?.experience ?? 'principiante',
-    interests: sanearSeleccionIntereses(user?.interests ?? ['bases']),
-    goalCourseId: user?.goalCourseId ?? '',
-  })
+  const estadoFormularioUsuario = useMemo(() => crearEstadoFormularioPerfil(user), [user])
+  const [formState, setFormState] = useState(() => crearEstadoFormularioPerfil(user))
+
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: '',
     nextPassword: '',
@@ -50,6 +60,10 @@ export function PaginaPerfil() {
   const [passwordError, setPasswordError] = useState('')
   const [passwordSuccessMessage, setPasswordSuccessMessage] = useState('')
   const [nameAvailabilityFeedback, setNameAvailabilityFeedback] = useState({
+    status: 'idle',
+    message: '',
+  })
+  const [nicknameAvailabilityFeedback, setNicknameAvailabilityFeedback] = useState({
     status: 'idle',
     message: '',
   })
@@ -97,6 +111,42 @@ export function PaginaPerfil() {
 
     return nameAvailabilityFeedback
   }, [formState.name, nameAvailabilityFeedback, user?.name])
+  const nicknameFeedback = useMemo(() => {
+    const trimmedNickname = formState.nickname.trim()
+
+    if (!trimmedNickname) {
+      return {
+        status: 'idle',
+        message: 'Opcional. Puedes usarlo como alias visible dentro de tu perfil.',
+      }
+    }
+
+    const nicknameMessage = validarNickname(trimmedNickname)
+
+    if (nicknameMessage) {
+      return {
+        status: 'invalid',
+        message: nicknameMessage,
+      }
+    }
+
+    if (trimmedNickname === (user?.nickname ?? '').trim()) {
+      return {
+        status: 'owned',
+        message: 'Ese nickname ya te pertenece.',
+      }
+    }
+
+    return nicknameAvailabilityFeedback
+  }, [formState.nickname, nicknameAvailabilityFeedback, user?.nickname])
+
+  useEffect(() => {
+    startTransition(() => {
+      setFormState(estadoFormularioUsuario)
+      setNameAvailabilityFeedback({ status: 'idle', message: '' })
+      setNicknameAvailabilityFeedback({ status: 'idle', message: '' })
+    })
+  }, [estadoFormularioUsuario])
 
   useEffect(() => {
     const trimmedName = crearNombreCompleto(formState.name)
@@ -126,6 +176,39 @@ export function PaginaPerfil() {
       window.clearTimeout(timeoutId)
     }
   }, [formState.name, user?.id, user?.name])
+
+  useEffect(() => {
+    const trimmedNickname = formState.nickname.trim()
+    const nicknameMessage = validarNickname(trimmedNickname)
+
+    if (
+      !trimmedNickname ||
+      nicknameMessage ||
+      trimmedNickname === (user?.nickname ?? '').trim()
+    ) {
+      return undefined
+    }
+
+    let isCancelled = false
+
+    const timeoutId = window.setTimeout(async () => {
+      setNicknameAvailabilityFeedback({
+        status: 'checking',
+        message: 'Validando disponibilidad del nickname...',
+      })
+
+      const nextFeedback = await verificarDisponibilidadNickname(trimmedNickname, user?.id ?? '')
+
+      if (!isCancelled) {
+        setNicknameAvailabilityFeedback(nextFeedback)
+      }
+    }, 350)
+
+    return () => {
+      isCancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [formState.nickname, user?.id, user?.nickname])
 
   function handleChange(event) {
     const { name, value } = event.target
@@ -188,12 +271,37 @@ export function PaginaPerfil() {
       return
     }
 
+    if (formState.nickname.trim()) {
+      const nicknameMessage = validarNickname(formState.nickname)
+
+      if (nicknameMessage) {
+        setError(nicknameMessage)
+        return
+      }
+    }
+
     const nextNameFeedback = await verificarDisponibilidadNombreVisible(formState.name, user?.id ?? '')
     setNameAvailabilityFeedback(nextNameFeedback)
 
     if (nextNameFeedback.status === 'invalid' || nextNameFeedback.status === 'taken') {
       setError(nextNameFeedback.message)
       return
+    }
+
+    if (formState.nickname.trim()) {
+      const nextNicknameFeedback = await verificarDisponibilidadNickname(
+        formState.nickname,
+        user?.id ?? '',
+      )
+      setNicknameAvailabilityFeedback(nextNicknameFeedback)
+
+      if (
+        nextNicknameFeedback.status === 'invalid' ||
+        nextNicknameFeedback.status === 'taken'
+      ) {
+        setError(nextNicknameFeedback.message)
+        return
+      }
     }
 
     if (formState.interests.length === 0 || formState.interests.length > 4) {
@@ -204,6 +312,7 @@ export function PaginaPerfil() {
     try {
       await updateUserProfile({
         name: crearNombreCompleto(formState.name),
+        nickname: formState.nickname.trim(),
         role: formState.role,
         experience: formState.experience,
         interests: formState.interests,
@@ -266,7 +375,7 @@ export function PaginaPerfil() {
             <div className="space-y-2">
               <p className="eyebrow">Perfil de aprendizaje</p>
               <h1 className="font-display text-4xl font-semibold text-foam">
-                {user?.name ?? 'Jasson'} - Ing. Sistemas en PyPath
+                {user?.name ?? 'Tu perfil en PyPath'}
               </h1>
               <p className="text-mute">
                 {profileLabels.roleLabel} / Nivel {profileLabels.experienceLabel}
@@ -331,7 +440,7 @@ export function PaginaPerfil() {
           <div>
             <p className="eyebrow">Editar perfil</p>
             <h2 className="mt-4 font-display text-3xl font-semibold text-foam">
-              Ajusta nombre de usuario, rol e intereses
+              Ajusta nombre de usuario, nickname, rol e intereses
             </h2>
             <p className="mt-3 text-mute">
               Este formulario guarda tus cambios y mantiene la misma experiencia del resto de la plataforma.
@@ -349,6 +458,19 @@ export function PaginaPerfil() {
                 onChange={handleChange}
               />
               <MensajeValidacionCampo feedback={nameFeedback} />
+            </label>
+
+            <label className="block space-y-2">
+              <span className="text-sm font-medium text-foam">Nickname opcional</span>
+              <input
+                className="field-input"
+                type="text"
+                name="nickname"
+                placeholder="Ejemplo: oscar.dev"
+                value={formState.nickname}
+                onChange={handleChange}
+              />
+              <MensajeValidacionCampo feedback={nicknameFeedback} />
             </label>
 
             <label className="block space-y-2">
@@ -595,5 +717,8 @@ export function PaginaPerfil() {
     </div>
   )
 }
+
+
+
 
 

@@ -3,6 +3,7 @@ import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { BarraProgreso } from '../../../componentes/BarraProgreso.jsx'
 import { combinarClases } from '../../../utilidades/combinarClases.js'
+import { cursoEstaPublicado } from '../../contenido/servicios/repositorioContenido.js'
 import { obtenerRutaEvaluacionDesdePaso } from '../../evaluaciones/selectores/selectoresEvaluaciones.js'
 import { EspacioReto } from '../../retos/componentes/EspacioReto.jsx'
 import {
@@ -416,6 +417,22 @@ export function PaginaLeccion() {
         <h1 className="mt-5 font-display text-3xl font-semibold text-foam">
           No pudimos encontrar esa misión
         </h1>
+      </Tarjeta>
+    )
+  }
+
+  if (!cursoEstaPublicado(record.course.id)) {
+    return (
+      <Tarjeta className="space-y-5 text-center">
+        <p className="eyebrow">Lección no disponible</p>
+        <h1 className="font-display text-3xl font-semibold text-foam">
+          Este curso sigue en preparación
+        </h1>
+        <p className="text-mute">
+          Las misiones y recursos del CMS se habilitan para estudiantes solo cuando el curso
+          queda publicado.
+        </p>
+        <Boton onClick={() => navigate('/dashboard')}>Volver al panel</Boton>
       </Tarjeta>
     )
   }

@@ -3,7 +3,12 @@ import { useNavigate } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Modal } from '../../../componentes/Modal.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
-import { obtenerCatalogoCursos, obtenerCursos } from '../../contenido/servicios/repositorioContenido.js'
+import {
+  obtenerCatalogoCursos,
+  obtenerCursoCatalogoPorId,
+  obtenerCursos,
+  obtenerCursosPublicados,
+} from '../../contenido/servicios/repositorioContenido.js'
 import { obtenerRutaEvaluacionDesdePaso } from '../../evaluaciones/selectores/selectoresEvaluaciones.js'
 import { construirPlanRecomendacion } from '../../inicio/servicios/servicioRecomendacionCursos.js'
 import { obtenerPerfilLegible } from '../../perfil/servicios/servicioResumenPerfil.js'
@@ -23,6 +28,7 @@ export function PaginaPanel() {
   const [promptDismissed, setPromptDismissed] = useState(false)
   const { roleLabel } = obtenerPerfilLegible(user)
   const cursos = obtenerCursos()
+  const cursosPublicados = obtenerCursosPublicados()
   const catalogoCursos = obtenerCatalogoCursos()
   const progressWithAssessment = {
     ...progress,
@@ -30,8 +36,10 @@ export function PaginaPanel() {
   }
   const canSkipFundamentals = puedeOmitirFundamentosConDiagnostico(onboarding.assessmentResult)
 
-  const fundamentalsCourse = cursos.find((course) => course.id === 'python-fundamentals')
-  const liveLibraryCourses = cursos.filter((course) => course.id !== 'python-fundamentals')
+  const fundamentalsCourse =
+    cursosPublicados.find((course) => course.id === 'python-fundamentals') ??
+    cursos.find((course) => course.id === 'python-fundamentals')
+  const liveLibraryCourses = cursosPublicados.filter((course) => course.id !== 'python-fundamentals')
   const upcomingCourses = catalogoCursos.filter((catalogCourse) => catalogCourse.status !== 'live')
   const fundamentalsSummary = obtenerResumenCurso('python-fundamentals', progressWithAssessment)
   const fundamentalsCompleted = fundamentalsSummary.cursoEstaCompletado
@@ -39,7 +47,7 @@ export function PaginaPanel() {
     onboarding.assessmentResult?.recommendedCourseId ?? user?.goalCourseId ?? 'python-fundamentals'
   const focusCourse =
     (canSkipFundamentals
-      ? cursos.find((courseItem) => {
+      ? cursosPublicados.find((courseItem) => {
           const courseSummary = obtenerResumenCurso(courseItem.id, progressWithAssessment)
           return (
             courseItem.id === preferredCourseId &&
@@ -47,7 +55,7 @@ export function PaginaPanel() {
             courseSummary.nextStep
           )
         }) ??
-        cursos.find((courseItem) => {
+        cursosPublicados.find((courseItem) => {
           const courseSummary = obtenerResumenCurso(courseItem.id, progressWithAssessment)
           return (
             courseItem.id !== 'python-fundamentals' &&
@@ -56,7 +64,7 @@ export function PaginaPanel() {
           )
         })
       : null) ??
-    cursos.find((courseItem) => {
+    cursosPublicados.find((courseItem) => {
       const courseSummary = obtenerResumenCurso(courseItem.id, progressWithAssessment)
       return !courseSummary.cursoEstaCompletado && courseSummary.nextStep
     }) ??
@@ -64,7 +72,8 @@ export function PaginaPanel() {
   const focusSummary = obtenerResumenCurso(focusCourse.id, progressWithAssessment)
   const stats = obtenerEstadisticasGamificadas(progress.completedLessons)
   const recommendedStart = obtenerInicioRecomendado(null, onboarding.assessmentResult)
-  const goalCourse = catalogoCursos.find((course) => course.id === user?.goalCourseId)
+  const goalCourse = user?.goalCourseId ? obtenerCursoCatalogoPorId(user.goalCourseId) : null
+  const goalCourseIsPublished = goalCourse?.status === 'live'
   const librariesUnlocked = fundamentalsCompleted || canSkipFundamentals
   const showDiagnosticPrompt = !onboarding.completed && !promptDismissed
   const profileRecommendationPlan = construirPlanRecomendacion({
@@ -212,10 +221,19 @@ export function PaginaPanel() {
                 ? 'Esta preferencia viene del recomendador y ya está guardada en tu perfil. Como tu diagnóstico fue muy alto, puedes entrar directo a este curso.'
                 : 'Esta preferencia viene del recomendador y ya está guardada en tu perfil. El recorrido sigue respetando Fundamentos como base cuando hace falta.'}
             </p>
+            {!goalCourseIsPublished && (
+              <p className="mt-3 text-sm text-mute">
+                Este curso sigue en preparación y se habilitará aquí cuando quede publicado.
+              </p>
+            )}
           </div>
 
-          <Boton variant="secondary" onClick={() => navigate(`/course/${goalCourse.id}`)}>
-            Ver curso objetivo
+          <Boton
+            variant="secondary"
+            disabled={!goalCourseIsPublished}
+            onClick={() => navigate(`/course/${goalCourse.id}`)}
+          >
+            {goalCourseIsPublished ? 'Ver curso objetivo' : 'Curso en preparación'}
           </Boton>
         </Tarjeta>
       )}

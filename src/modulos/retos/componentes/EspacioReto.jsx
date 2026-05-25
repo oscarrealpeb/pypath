@@ -1,12 +1,19 @@
-import { lazy, Suspense, useState, useEffect } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
+import { Modal } from '../../../componentes/Modal.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
+import { obtenerEjerciciosLeccion } from '../../cursos/selectores/selectoresCursos.js'
 import { obtenerRutaEvaluacionDesdePaso } from '../../evaluaciones/selectores/selectoresEvaluaciones.js'
-import { useAccionesApp } from '../../progreso/contexto/useEstadoApp.js'
-import { validarReto } from '../servicios/servicioValidacionReto.js'
+import {
+  ejercicioEstaCompletado,
+  ejercicioTieneSolucionRevelada,
+  obtenerEstadoEjerciciosLeccion,
+} from '../../progreso/selectores/selectoresProgreso.js'
+import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 import { ejecutarSimulacionReto } from '../servicios/servicioEjecucionPython.js'
 import { ejecutarRetoPython } from '../servicios/servicioRuntimePython.js'
+import { validarReto } from '../servicios/servicioValidacionReto.js'
 
 const LazyCodeEditor = lazy(() =>
   import('../../../componentes/EditorCodigo.jsx').then((module) => ({
@@ -42,26 +49,26 @@ function getRuntimeMeta(challenge) {
       usesRealPython,
       eyebrow: 'Python real en navegador',
       description:
-        'Esta misión sí se ejecuta de verdad. Verás la salida real de tu código antes de validar.',
+        'Esta mision si se ejecuta de verdad. Veras la salida real de tu codigo antes de validar.',
       outputLabel: 'Salida real',
-      idleCopy: 'Pulsa Ejecutar para correr tu solución y ver la consola real de Python.',
+      idleCopy: 'Pulsa Ejecutar para correr tu solucion y ver la consola real de Python.',
       loadingTitle: 'Preparando Python',
-      loadingOutput: 'Cargando el runtime y ejecutando tu solución...',
+      loadingOutput: 'Cargando el runtime y ejecutando tu solucion...',
       loadingDetails:
-        'La primera ejecución puede tardar unos segundos porque el navegador descarga Python.',
+        'La primera ejecucion puede tardar unos segundos porque el navegador descarga Python.',
     }
   }
 
   return {
     usesRealPython,
-    eyebrow: 'Revisión guiada',
+    eyebrow: 'Revision guiada',
     description:
-      'Esta misión depende de una biblioteca visual. Aquí revisamos la estructura clave del código y te mostramos el comportamiento esperado.',
+      'Esta mision depende de una biblioteca visual. Aqui revisamos la estructura clave del codigo y te mostramos el comportamiento esperado.',
     outputLabel: 'Vista previa guiada',
     idleCopy: 'Pulsa Ejecutar para ver una vista previa del comportamiento esperado.',
     loadingTitle: 'Revisando estructura',
-    loadingOutput: 'Analizando tu solución...',
-    loadingDetails: 'Comprobamos si ya están las piezas importantes de la misión.',
+    loadingOutput: 'Analizando tu solucion...',
+    loadingDetails: 'Comprobamos si ya estan las piezas importantes de la mision.',
   }
 }
 
@@ -113,65 +120,136 @@ function obtenerAlturaEditor(challenge, solutionCode) {
   return { codeMirrorHeight: '430px', fallbackClass: 'h-[430px]' }
 }
 
-export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
-  const navigate = useNavigate()
-  const { completeLesson } = useAccionesApp()
-  
-  const challenges = lesson.challenges || [lesson.challenge]
-  const [currentChallengeIndex, setCurrentChallengeIndex] = useState(0)
-  const currentChallenge = challenges[currentChallengeIndex]
-  const isLastChallenge = currentChallengeIndex === challenges.length - 1
+function encontrarPrimerEjercicioPendiente(challenges, progress, lesson) {
+  const pendingIndex = challenges.findIndex((challenge) => {
+    const completed = ejercicioEstaCompletado(progress, lesson, challenge.id)
+    const revealed = ejercicioTieneSolucionRevelada(progress, challenge.id)
+    return !completed && !revealed
+  })
 
-  const runtimeMeta = getRuntimeMeta(currentChallenge)
-  const solutionCode =
-    currentChallenge.solutionCode ?? lesson.resources.exampleCode ?? currentChallenge.starterCode
+  return pendingIndex >= 0 ? pendingIndex : 0
+}
+
+function construirMensajeEjercicioCompletado({
+  xp,
+  isOptional,
+  allRequiredResolvedAfterAction,
+}) {
+  if (isOptional) {
+    return `Ejercicio opcional completado. Sumaste ${xp} XP extra a tu perfil.`
+  }
+
+  if (allRequiredResolvedAfterAction) {
+    return `Ejercicio completado. La leccion quedo superada y sumaste ${xp} XP.`
+  }
+
+  return `Ejercicio completado. Sumaste ${xp} XP y ya puedes seguir con el siguiente paso.`
+}
+
+function construirMensajeEjercicioRevelado({
+  penaltyXp,
+  isOptional,
+  allRequiredResolvedAfterAction,
+}) {
+  if (isOptional) {
+    return `Mostramos la solucion y este ejercicio opcional quedo resuelto. Se descontaron ${penaltyXp} XP de tu perfil.`
+  }
+
+  if (allRequiredResolvedAfterAction) {
+    return `Mostramos la solucion y este ejercicio quedo resuelto. Se descontaron ${penaltyXp} XP de tu perfil y la leccion ya cuenta como superada.`
+  }
+
+  return `Mostramos la solucion y este ejercicio ya cuenta como resuelto. Se descontaron ${penaltyXp} XP de tu perfil.`
+}
+
+function estaLeccionResueltaTrasAccion(exerciseState, exerciseId) {
+  return exerciseState.requiredExerciseIds.every(
+    (id) =>
+      id === exerciseId ||
+      exerciseState.completedExercisesSet.has(id) ||
+      exerciseState.revealedExercisesSet.has(id),
+  )
+}
+
+function construirFeedbackInicial({
+  challenge,
+  currentExerciseCompleted,
+  currentExerciseOptional,
+  currentExerciseRevealed,
+  exerciseState,
+}) {
+  if (currentExerciseRevealed) {
+    return {
+      status: 'resolved',
+      message: construirMensajeEjercicioRevelado({
+        penaltyXp: challenge.solutionPenaltyXp ?? 0,
+        isOptional: currentExerciseOptional,
+        allRequiredResolvedAfterAction: exerciseState.allRequiredResolved,
+      }),
+      missingKeywords: [],
+    }
+  }
+
+  if (currentExerciseCompleted) {
+    return {
+      status: 'success',
+      message: construirMensajeEjercicioCompletado({
+        xp: challenge.xp ?? 0,
+        isOptional: currentExerciseOptional,
+        allRequiredResolvedAfterAction: exerciseState.allRequiredResolved,
+      }),
+      missingKeywords: [],
+    }
+  }
+
+  return null
+}
+
+function ExerciseWorkspace({
+  challenge,
+  challengeIndex,
+  challengesCount,
+  completionStep,
+  courseId,
+  currentExerciseCompleted,
+  currentExerciseOptional,
+  currentExerciseRevealed,
+  exerciseState,
+  isLastChallenge,
+  lesson,
+  navigate,
+  onAdvanceExercise,
+  onCompleteExercise,
+  onRevealExerciseSolution,
+}) {
+  const runtimeMeta = getRuntimeMeta(challenge)
+  const solutionCode = challenge.solutionCode ?? lesson.resources.exampleCode ?? challenge.starterCode
   const solutionNote =
-    currentChallenge.solutionNote ??
-    'Compárala con tu intento para entender qué pieza faltaba o qué detalle debía cambiar.'
-  const editorHeight = obtenerAlturaEditor(currentChallenge, solutionCode)
-  
-  const [code, setCode] = useState(currentChallenge.starterCode)
-  const [feedback, setFeedback] = useState(
-    isCompleted && isLastChallenge
-      ? {
-          status: 'success',
-          message: 'Esta misión ya está completada. Puedes repasar el código o seguir avanzando.',
-          missingKeywords: [],
-        }
-      : null,
+    challenge.solutionNote ??
+    'Comparala con tu intento para entender que pieza faltaba o que detalle debia cambiar.'
+  const editorHeight = obtenerAlturaEditor(challenge, solutionCode)
+  const currentExerciseResolved = currentExerciseCompleted || currentExerciseRevealed
+  const [code, setCode] = useState(challenge.starterCode ?? '')
+  const [feedback, setFeedback] = useState(() =>
+    construirFeedbackInicial({
+      challenge,
+      currentExerciseCompleted,
+      currentExerciseOptional,
+      currentExerciseRevealed,
+      exerciseState,
+    }),
   )
   const [executionResult, setExecutionResult] = useState(null)
   const [isRunning, setIsRunning] = useState(false)
-  const [showSolution, setShowSolution] = useState(false)
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCode(currentChallenge.starterCode)
-    setFeedback(
-      isCompleted && isLastChallenge
-        ? {
-            status: 'success',
-            message: 'Esta misión ya está completada. Puedes repasar el código o seguir avanzando.',
-            missingKeywords: [],
-          }
-        : null
-    )
-    setExecutionResult(null)
-    setIsRunning(false)
-    setShowSolution(false)
-  }, [currentChallengeIndex, currentChallenge.starterCode, isCompleted, isLastChallenge])
-
-  function handleCodeChange(nextCode) {
-    setCode(nextCode)
-    setShowSolution(false)
-  }
+  const [showSolution, setShowSolution] = useState(currentExerciseRevealed)
+  const [showRevealDialog, setShowRevealDialog] = useState(false)
 
   async function executeCurrentCode() {
     if (runtimeMeta.usesRealPython) {
       return ejecutarRetoPython(code)
     }
 
-    return ejecutarSimulacionReto(code, { ...lesson, challenge: currentChallenge })
+    return ejecutarSimulacionReto(code, { ...lesson, challenge })
   }
 
   async function handleRun() {
@@ -188,6 +266,10 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
   }
 
   async function handleValidate() {
+    if (currentExerciseResolved) {
+      return
+    }
+
     setIsRunning(true)
     setExecutionResult(buildLoadingState(runtimeMeta))
 
@@ -195,46 +277,102 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
       const latestExecution = await executeCurrentCode()
       setExecutionResult(latestExecution)
 
-      const result = validarReto(code, { ...lesson, challenge: currentChallenge }, latestExecution)
+      const result = validarReto(code, { ...lesson, challenge }, latestExecution)
       setFeedback(result)
 
       if (result.status === 'success') {
+        const allRequiredResolvedAfterAction = estaLeccionResueltaTrasAccion(exerciseState, challenge.id)
+
+        onCompleteExercise(challenge.id)
         setShowSolution(false)
-        if (isLastChallenge) {
-          completeLesson(lesson.id)
-        }
+        setFeedback({
+          ...result,
+          message: construirMensajeEjercicioCompletado({
+            xp: challenge.xp ?? 0,
+            isOptional: currentExerciseOptional,
+            allRequiredResolvedAfterAction,
+          }),
+        })
       }
     } finally {
       setIsRunning(false)
     }
   }
 
-  const isSuccess = feedback?.status === 'success'
+  function handleConfirmRevealSolution() {
+    const allRequiredResolvedAfterAction = estaLeccionResueltaTrasAccion(exerciseState, challenge.id)
+
+    onRevealExerciseSolution(challenge.id)
+    setShowRevealDialog(false)
+    setShowSolution(true)
+    setFeedback({
+      status: 'resolved',
+      message: construirMensajeEjercicioRevelado({
+        penaltyXp: challenge.solutionPenaltyXp ?? 0,
+        isOptional: currentExerciseOptional,
+        allRequiredResolvedAfterAction,
+      }),
+      missingKeywords: [],
+    })
+  }
+
+  const isResolved =
+    currentExerciseResolved || feedback?.status === 'success' || feedback?.status === 'resolved'
 
   return (
     <div className="space-y-5">
+      <Modal open={showRevealDialog} onClose={() => setShowRevealDialog(false)} size="md">
+        <div className="space-y-5 p-7 sm:p-8">
+          <div className="space-y-3">
+            <p className="eyebrow">Confirmar penalizacion</p>
+            <h2 className="font-display text-3xl font-semibold text-foam">
+              Revelar la solucion de este ejercicio?
+            </h2>
+            <p className="text-mute">
+              Si continuas, este ejercicio quedara resuelto automaticamente y se descontaran{' '}
+              <span className="font-semibold text-foam">{challenge.solutionPenaltyXp ?? 0} XP</span>{' '}
+              de tu perfil.
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-mute">
+            Esta penalizacion solo se aplica una vez por ejercicio. Si aceptas, podras seguir con
+            la leccion, pero ese XP ya no se recupera automaticamente.
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
+            <Boton variant="ghost" onClick={() => setShowRevealDialog(false)}>
+              Seguir intentandolo
+            </Boton>
+            <Boton variant="secondary" onClick={handleConfirmRevealSolution}>
+              Revelar y perder XP
+            </Boton>
+          </div>
+        </div>
+      </Modal>
+
       <Tarjeta className="space-y-5">
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="eyebrow">
-              Reto práctico {challenges.length > 1 ? `(${currentChallengeIndex + 1}/${challenges.length})` : ''}
+              Reto practico {challengesCount > 1 ? `(${challengeIndex + 1}/${challengesCount})` : ''}
             </span>
-            <span className="status-chip">{currentChallenge.exerciseType}</span>
+            <span className="status-chip">{challenge.exerciseType}</span>
             <span className="status-chip">{runtimeMeta.eyebrow}</span>
+            <span className="status-chip">{challenge.xp} XP</span>
+            {currentExerciseOptional ? <span className="status-chip">XP opcional</span> : null}
           </div>
-          <h2 className="font-display text-3xl font-semibold text-foam">
-            {currentChallenge.title}
-          </h2>
-          <p className="max-w-3xl text-mute">{currentChallenge.prompt}</p>
+          <h2 className="font-display text-3xl font-semibold text-foam">{challenge.title}</h2>
+          <p className="max-w-3xl text-mute">{challenge.prompt}</p>
         </div>
 
         <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-mute">Qué debe hacer tu solución</p>
-            <p className="mt-3 text-sm leading-7 text-mute">{currentChallenge.successCriteria}</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-mute">Que debe hacer tu solucion</p>
+            <p className="mt-3 text-sm leading-7 text-mute">{challenge.successCriteria}</p>
 
             <div className="mt-4 flex flex-wrap gap-2">
-              {currentChallenge.expectedKeywords.map((keyword) => (
+              {(challenge.expectedKeywords ?? []).map((keyword) => (
                 <span key={keyword} className="status-chip">
                   {keyword}
                 </span>
@@ -243,9 +381,9 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
           </div>
 
           <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-mute">Qué se espera ver</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-mute">Que se espera ver</p>
             <div className="mt-3 rounded-2xl border border-border/70 bg-obsidian/80 p-4 font-mono text-sm text-foam">
-              <pre className="whitespace-pre-wrap">{currentChallenge.expectedResult}</pre>
+              <pre className="whitespace-pre-wrap">{challenge.expectedResult}</pre>
             </div>
             <p className="mt-3 text-sm leading-7 text-mute">{runtimeMeta.description}</p>
           </div>
@@ -261,7 +399,9 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
         <Suspense
           fallback={
             <div className="overflow-hidden rounded-2xl border border-border bg-panel-2/70">
-              <div className={`flex items-center justify-center text-sm text-mute ${editorHeight.fallbackClass}`}>
+              <div
+                className={`flex items-center justify-center text-sm text-mute ${editorHeight.fallbackClass}`}
+              >
                 Cargando editor...
               </div>
             </div>
@@ -269,7 +409,12 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
         >
           <LazyCodeEditor
             value={code}
-            onChange={handleCodeChange}
+            onChange={(nextCode) => {
+              setCode(nextCode)
+              if (!currentExerciseRevealed) {
+                setShowSolution(false)
+              }
+            }}
             height={editorHeight.codeMirrorHeight}
           />
         </Suspense>
@@ -278,7 +423,7 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
           <div className="space-y-3">
             <p className="text-sm text-mute">
               Ejecuta cuando quieras revisar la salida actual y valida cuando creas que ya cumple
-              el objetivo de la misión.
+              el objetivo de este ejercicio.
             </p>
           </div>
 
@@ -286,8 +431,8 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
             <Boton variant="secondary" onClick={handleRun} disabled={isRunning}>
               {isRunning ? 'Ejecutando...' : 'Ejecutar'}
             </Boton>
-            <Boton onClick={handleValidate} disabled={isRunning}>
-              {isRunning ? 'Validando...' : 'Validar'}
+            <Boton onClick={handleValidate} disabled={isRunning || currentExerciseResolved}>
+              {isRunning ? 'Validando...' : currentExerciseResolved ? 'Resuelto' : 'Validar'}
             </Boton>
           </div>
         </div>
@@ -296,7 +441,7 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
           <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
             <p className="text-xs uppercase tracking-[0.22em] text-mute">Resultado esperado</p>
             <div className="mt-3 rounded-2xl border border-border/70 bg-obsidian/80 p-4 font-mono text-sm text-foam">
-              <pre className="whitespace-pre-wrap">{currentChallenge.expectedResult}</pre>
+              <pre className="whitespace-pre-wrap">{challenge.expectedResult}</pre>
             </div>
           </div>
 
@@ -305,59 +450,69 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
               <span className="text-xs uppercase tracking-[0.22em] text-mute">
                 {runtimeMeta.outputLabel}
               </span>
-              {executionResult && <span className="status-chip">{executionResult.title}</span>}
+              {executionResult ? <span className="status-chip">{executionResult.title}</span> : null}
             </div>
 
             <div className="mt-3 rounded-2xl border border-border/70 bg-obsidian/80 p-4 font-mono text-sm text-foam">
               <pre className="whitespace-pre-wrap">
-                {executionResult?.output ?? 'Sin ejecución aún.'}
+                {executionResult?.output ?? 'Sin ejecucion aun.'}
               </pre>
             </div>
 
-            <p className="mt-3 text-sm text-mute">
-              {executionResult?.details ?? runtimeMeta.idleCopy}
-            </p>
+            <p className="mt-3 text-sm text-mute">{executionResult?.details ?? runtimeMeta.idleCopy}</p>
           </div>
         </div>
       </Tarjeta>
 
       <Tarjeta
         className={`space-y-4 ${
-          isSuccess ? 'border-primary/30 bg-primary/10' : 'border-border/80'
+          isResolved ? 'border-primary/30 bg-primary/10' : 'border-border/80'
         }`}
       >
         <div className="flex flex-wrap items-center gap-3">
-          <span className="eyebrow">{isSuccess ? 'Correcto' : 'Feedback'}</span>
-          {feedback && (
-            <span className={`status-chip ${isSuccess ? 'text-primary' : 'text-warning'}`}>
-              {isSuccess ? 'Misión superada' : 'Aún falta'}
+          <span className="eyebrow">{isResolved ? 'Ejercicio resuelto' : 'Feedback'}</span>
+          {feedback ? (
+            <span className={`status-chip ${isResolved ? 'text-primary' : 'text-warning'}`}>
+              {isResolved ? 'Listo para continuar' : 'Aun falta'}
             </span>
-          )}
+          ) : null}
         </div>
 
         <p className="text-mute">
-          {feedback?.message ?? 'Ejecuta la validación para revisar si tu solución cumple la misión.'}
+          {feedback?.message ?? 'Ejecuta la validacion para revisar si tu solucion cumple este ejercicio.'}
         </p>
 
-        {feedback && !isSuccess && solutionCode && (
+        {(feedback && !currentExerciseResolved && solutionCode) || currentExerciseRevealed ? (
           <div className="space-y-4 rounded-2xl border border-border/70 bg-white/5 p-4">
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Boton
-                type="button"
-                variant={showSolution ? 'secondary' : 'primary'}
-                onClick={() => setShowSolution((current) => !current)}
-              >
-                {showSolution ? 'Ocultar solución' : 'Ver solución completa'}
-              </Boton>
-              <Boton type="button" variant="ghost" onClick={() => setShowSolution(false)}>
-                Seguir intentándolo
-              </Boton>
+              {currentExerciseRevealed ? (
+                <Boton
+                  type="button"
+                  variant={showSolution ? 'secondary' : 'primary'}
+                  onClick={() => setShowSolution((current) => !current)}
+                >
+                  {showSolution ? 'Ocultar solucion' : 'Ver solucion completa'}
+                </Boton>
+              ) : (
+                <>
+                  <Boton
+                    type="button"
+                    variant={showSolution ? 'secondary' : 'primary'}
+                    onClick={() => setShowRevealDialog(true)}
+                  >
+                    Revelar solucion y perder {challenge.solutionPenaltyXp ?? 0} XP
+                  </Boton>
+                  <Boton type="button" variant="ghost" onClick={() => setShowSolution(false)}>
+                    Seguir intentandolo
+                  </Boton>
+                </>
+              )}
             </div>
 
-            {showSolution && (
+            {showSolution ? (
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.22em] text-mute">Explicación breve</p>
+                  <p className="text-xs uppercase tracking-[0.22em] text-mute">Explicacion breve</p>
                   <p className="text-sm text-mute">{solutionNote}</p>
                 </div>
                 <div className="overflow-hidden rounded-2xl border border-border/80 bg-obsidian/90 p-4">
@@ -366,22 +521,20 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
                   </pre>
                 </div>
               </div>
-            )}
+            ) : null}
           </div>
-        )}
+        ) : null}
 
-        {feedback?.missingKeywords?.length > 0 && (
+        {feedback?.missingKeywords?.length > 0 && !isResolved ? (
           <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-yellow-100">
-            El validador todavía espera estas pistas: {feedback.missingKeywords.join(', ')}.
+            El validador todavia espera estas pistas: {feedback.missingKeywords.join(', ')}.
           </div>
-        )}
+        ) : null}
 
-        {isSuccess && (
+        {isResolved ? (
           <div className="flex flex-col gap-3 sm:flex-row">
             {!isLastChallenge ? (
-              <Boton onClick={() => setCurrentChallengeIndex(i => i + 1)}>
-                Siguiente Ejercicio
-              </Boton>
+              <Boton onClick={onAdvanceExercise}>Siguiente ejercicio</Boton>
             ) : (
               <>
                 {completionStep ? (
@@ -397,8 +550,68 @@ export function EspacioReto({ lesson, completionStep, courseId, isCompleted }) {
               </>
             )}
           </div>
-        )}
+        ) : null}
       </Tarjeta>
     </div>
+  )
+}
+
+export function EspacioReto({ lesson, completionStep, courseId }) {
+  const navigate = useNavigate()
+  const { progress } = useEstadoApp()
+  const { completeExercise, revealExerciseSolution } = useAccionesApp()
+  const challenges = obtenerEjerciciosLeccion(lesson)
+  const [currentChallengeIndex, setCurrentChallengeIndex] = useState(() =>
+    encontrarPrimerEjercicioPendiente(challenges, progress, lesson),
+  )
+  const currentChallenge = challenges[currentChallengeIndex] ?? challenges[0]
+  const exerciseState = obtenerEstadoEjerciciosLeccion(progress, lesson)
+
+  if (!currentChallenge) {
+    return (
+      <Tarjeta className="space-y-4">
+        <p className="eyebrow">Sin reto configurado</p>
+        <p className="text-mute">
+          Esta leccion todavia no tiene ejercicios listos para resolver.
+        </p>
+      </Tarjeta>
+    )
+  }
+
+  const currentExerciseCompleted = ejercicioEstaCompletado(progress, lesson, currentChallenge.id)
+  const currentExerciseRevealed = ejercicioTieneSolucionRevelada(progress, currentChallenge.id)
+  const currentExerciseOptional = exerciseState.optionalExerciseIds.includes(currentChallenge.id)
+  const isLastChallenge = currentChallengeIndex === challenges.length - 1
+
+  return (
+    <ExerciseWorkspace
+      key={currentChallenge.id}
+      challenge={currentChallenge}
+      challengeIndex={currentChallengeIndex}
+      challengesCount={challenges.length}
+      completionStep={completionStep}
+      courseId={courseId}
+      currentExerciseCompleted={currentExerciseCompleted}
+      currentExerciseOptional={currentExerciseOptional}
+      currentExerciseRevealed={currentExerciseRevealed}
+      exerciseState={exerciseState}
+      isLastChallenge={isLastChallenge}
+      lesson={lesson}
+      navigate={navigate}
+      onAdvanceExercise={() =>
+        setCurrentChallengeIndex((current) => Math.min(challenges.length - 1, current + 1))
+      }
+      onCompleteExercise={(exerciseId) =>
+        completeExercise(lesson.id, exerciseId, exerciseState.requiredExerciseIds)
+      }
+      onRevealExerciseSolution={(exerciseId) =>
+        revealExerciseSolution(
+          lesson.id,
+          exerciseId,
+          exerciseState.requiredExerciseIds,
+          currentChallenge.solutionPenaltyXp ?? 0,
+        )
+      }
+    />
   )
 }

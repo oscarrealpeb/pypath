@@ -1,7 +1,8 @@
 import { obtenerCatalogoCursos } from '../../contenido/servicios/repositorioContenido.js'
 import { obtenerProgresoCurso } from '../../cursos/selectores/selectoresCursos.js'
+import { obtenerEstadisticasGamificadas } from '../../progreso/selectores/selectoresProgreso.js'
 
-function isRecent(dateValue, days = 7) {
+function esReciente(dateValue, days = 7) {
   if (!dateValue) {
     return false
   }
@@ -34,6 +35,16 @@ function resolverTituloCurso(courseId, courseTitles) {
 function obtenerTiempoEvento(event) {
   const timestamp = new Date(event?.timestamp ?? 0).getTime()
   return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function crearProgresoVacio() {
+  return {
+    completedLessons: [],
+    completedExercises: [],
+    completedUnitAssessments: [],
+    completedCourseAssessments: [],
+    revealedSolutionExercises: [],
+  }
 }
 
 function formatearEvento(event, courseTitles) {
@@ -116,31 +127,32 @@ function formatearEvento(event, courseTitles) {
 }
 
 export function obtenerResumenUsuario(user, userState) {
-  const progress = userState?.progress ?? {
-    completedLessons: [],
-    completedUnitAssessments: [],
-    completedCourseAssessments: [],
-  }
+  const progress = userState?.progress ?? crearProgresoVacio()
   const catalog = obtenerCatalogoCursos()
+  const courseTitles = construirIndiceCursos(catalog)
   const touchedCourses = catalog
     .map((course) => ({
       course,
-      progress: obtenerProgresoCurso(
-        course.id,
-        progress.completedLessons,
-        progress.completedUnitAssessments,
-        progress.completedCourseAssessments,
-      ),
+      progress: obtenerProgresoCurso(course.id, progress),
     }))
     .filter(({ progress: courseProgress }) => courseProgress.completedCount > 0)
+
+  const gamification = obtenerEstadisticasGamificadas(progress)
 
   return {
     user,
     progress,
     touchedCourses,
+    goalCourseTitle: user.goalCourseId
+      ? resolverTituloCurso(user.goalCourseId, courseTitles)
+      : 'Sin curso objetivo',
     completedLessons: progress.completedLessons.length,
     completedAssessments:
       progress.completedUnitAssessments.length + progress.completedCourseAssessments.length,
+    xp: gamification.xp,
+    earnedXp: gamification.earnedXp,
+    penaltyXp: gamification.penaltyXp,
+    rankTitle: gamification.rankTitle,
   }
 }
 
@@ -148,7 +160,11 @@ export function obtenerMetricasAdmin(users = [], userStates = {}, activity = [])
   const activeUsers = users.filter((user) => user.status !== 'disabled')
   const disabledUsers = users.filter((user) => user.status === 'disabled')
   const adminUsers = users.filter((user) => user.systemRole === 'admin')
-  const recentUsers = users.filter((user) => isRecent(user.lastLoginAt))
+  const studentUsers = users.length - adminUsers.length
+  const recentSignIns = users.filter((user) => esReciente(user.lastLoginAt))
+  const emailUsers = users.filter((user) => user.provider === 'email')
+  const googleUsers = users.filter((user) => user.provider === 'google')
+  const verifiedEmailUsers = emailUsers.filter((user) => user.emailVerified)
   const catalog = obtenerCatalogoCursos()
   const courseTitles = construirIndiceCursos(catalog)
 
@@ -160,13 +176,7 @@ export function obtenerMetricasAdmin(users = [], userStates = {}, activity = [])
           return false
         }
 
-        const courseProgress = obtenerProgresoCurso(
-          course.id,
-          progress.completedLessons,
-          progress.completedUnitAssessments,
-          progress.completedCourseAssessments,
-        )
-
+        const courseProgress = obtenerProgresoCurso(course.id, progress)
         return courseProgress.completedCount > 0
       }).length
 
@@ -183,8 +193,13 @@ export function obtenerMetricasAdmin(users = [], userStates = {}, activity = [])
     activeUsers: activeUsers.length,
     disabledUsers: disabledUsers.length,
     adminUsers: adminUsers.length,
-    learnerUsers: users.length - adminUsers.length,
-    usersWithRecentActivity: recentUsers.length,
+    learnerUsers: studentUsers,
+    studentUsers,
+    emailUsers: emailUsers.length,
+    googleUsers: googleUsers.length,
+    verifiedEmailUsers: verifiedEmailUsers.length,
+    usersWithRecentActivity: recentSignIns.length,
+    usersWithRecentSignIn: recentSignIns.length,
     coursePopularity,
     recentEvents: [...activity]
       .sort((left, right) => obtenerTiempoEvento(right) - obtenerTiempoEvento(left))

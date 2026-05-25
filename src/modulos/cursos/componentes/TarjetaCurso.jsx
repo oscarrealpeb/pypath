@@ -30,9 +30,7 @@ export function TarjetaCurso({ course, progress, assessmentResult }) {
 
       const progressSnapshot = obtenerProgresoCurso(
         requiredCourseId,
-        progress.completedLessons,
-        progress.completedUnitAssessments,
-        progress.completedCourseAssessments,
+        progress,
       )
       return progressSnapshot.cursoEstaCompletado
     })

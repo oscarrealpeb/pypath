@@ -125,9 +125,7 @@ export function PaginaCurso() {
 
   const courseProgress = obtenerProgresoCurso(
     course.id,
-    progress.completedLessons,
-    progress.completedUnitAssessments,
-    progress.completedCourseAssessments,
+    progress,
   )
   const courseSummary = obtenerResumenCurso(course.id, progressWithAssessment)
   const nextStep = courseSummary.nextStep
@@ -141,9 +139,9 @@ export function PaginaCurso() {
     : false
   const finalAssessmentUnlocked = finalAssessmentRecord
     ? evaluacionFinalEstaDesbloqueada(
-        progress.completedLessons,
-        progress.completedUnitAssessments,
-        progress.completedCourseAssessments,
+        progressWithAssessment,
+        [],
+        [],
         course.id,
       )
     : false

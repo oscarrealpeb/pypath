@@ -26,9 +26,7 @@ export function obtenerProgresoGeneral(progress) {
     (accumulator, course) => {
       const courseProgress = obtenerProgresoCurso(
         course.id,
-        progress.completedLessons,
-        progress.completedUnitAssessments,
-        progress.completedCourseAssessments,
+        progress,
       )
 
       return {
@@ -60,9 +58,7 @@ export function obtenerResumenesCursos(progress, assessmentResult = null) {
     meta: obtenerCatalogoCursos().find((item) => item.id === course.id) ?? null,
     progress: obtenerProgresoCurso(
       course.id,
-      progress.completedLessons,
-      progress.completedUnitAssessments,
-      progress.completedCourseAssessments,
+      progress,
     ),
     summary: obtenerResumenCurso(course.id, {
       ...progress,

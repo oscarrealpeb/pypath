@@ -295,6 +295,7 @@ export function crearPlantillaUnidad(name, courseId, unitCount = 0) {
 export function crearPlantillaLeccion(name, courseId, unitId, lessonCount = 0) {
   const baseId = slugify(name || `leccion-${lessonCount + 1}`) || `leccion-${lessonCount + 1}`
   const id = `${courseId}-${unitId}-${baseId}`
+  const challengeId = `${id}::exercise::1`
 
   return {
     id,
@@ -328,12 +329,15 @@ export function crearPlantillaLeccion(name, courseId, unitId, lessonCount = 0) {
       hint: 'Agrega una pista concreta y corta que ayude sin resolver todo.',
     },
     challenge: {
+      id: challengeId,
       runtimeMode: permiteRuntimePython(courseId) ? 'python' : 'guided',
       exerciseType: 'Completar código',
       title: `Reto: ${name?.trim() || `Nueva lección ${lessonCount + 1}`}`,
       prompt: 'Explica aquí qué debe construir o corregir la persona.',
       starterCode:
         '# Escribe tu solución aquí\nresultado = "PyPath"\nprint(resultado)\n',
+      xp: 120,
+      solutionPenaltyXp: 120,
       expectedKeywords: ['print'],
       successCriteria: 'Describe con claridad qué debe incluir la solución para considerarla correcta.',
       expectedResult: 'PyPath',
@@ -357,6 +361,90 @@ function obtenerRetosLeccion(lesson) {
   }
 
   return []
+}
+
+function parsearNumeroNoNegativo(value, fallback = 0) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback
+}
+
+function construirIdReto(lessonId, challenge, index) {
+  return challenge?.id?.trim() || `${lessonId}::exercise::${index + 1}`
+}
+
+function distribuirXpEquitativo(totalXp, count) {
+  if (!count || totalXp <= 0) {
+    return Array.from({ length: count }, () => 0)
+  }
+
+  const baseValue = Math.floor(totalXp / count)
+  const remainder = totalXp % count
+
+  return Array.from({ length: count }, (_, index) => baseValue + (index < remainder ? 1 : 0))
+}
+
+function normalizarRetosLeccion(lesson) {
+  const retos = obtenerRetosLeccion(lesson)
+
+  if (retos.length === 0) {
+    return []
+  }
+
+  const lessonXp = parsearNumeroNoNegativo(lesson?.xp, 120)
+  const explicitXpValues = retos.map((challenge) =>
+    Number.isFinite(Number(challenge?.xp)) ? parsearNumeroNoNegativo(challenge.xp, 0) : null,
+  )
+  const explicitTotalXp = explicitXpValues.reduce((total, xp) => total + (xp ?? 0), 0)
+  const missingXpIndexes = explicitXpValues.reduce((indexes, xp, index) => {
+    if (xp == null) {
+      indexes.push(index)
+    }
+
+    return indexes
+  }, [])
+  const xpPool = explicitTotalXp > 0 ? Math.max(0, lessonXp - explicitTotalXp) : lessonXp
+  const distributedXp = distribuirXpEquitativo(xpPool, missingXpIndexes.length)
+  let distributedIndex = 0
+
+  return retos.map((challenge, index) => {
+    const xp = explicitXpValues[index] ?? distributedXp[distributedIndex++] ?? 0
+    const penalty = Number.isFinite(Number(challenge?.solutionPenaltyXp))
+      ? parsearNumeroNoNegativo(challenge.solutionPenaltyXp, xp)
+      : xp
+
+    return {
+      ...challenge,
+      id: construirIdReto(lesson.id, challenge, index),
+      xp,
+      solutionPenaltyXp: Math.min(penalty, xp),
+    }
+  })
+}
+
+function crearBorradorReto(challenge, index, lessonId) {
+  const xp = parsearNumeroNoNegativo(challenge.xp, 0)
+  const solutionPenaltyXp = parsearNumeroNoNegativo(challenge.solutionPenaltyXp, xp)
+
+  return {
+    id: construirIdReto(lessonId, challenge, index),
+    title: challenge.title ?? `Ejercicio ${index + 1}`,
+    exerciseType: challenge.exerciseType ?? 'Completar codigo',
+    runtimeMode: challenge.runtimeMode ?? 'guided',
+    prompt: challenge.prompt ?? '',
+    starterCode: challenge.starterCode ?? '',
+    editorHeight: challenge.editorHeight ?? '310px',
+    expectedKeywordsText: (challenge.expectedKeywords ?? []).join(', '),
+    successCriteria: challenge.successCriteria ?? '',
+    expectedResult: challenge.expectedResult ?? '',
+    solutionCode: challenge.solutionCode ?? '',
+    solutionNote: challenge.solutionNote ?? '',
+    salidaGuiada: challenge.salidaGuiada ?? '',
+    executionNote: challenge.executionNote ?? '',
+    successMessage: challenge.successMessage ?? '',
+    xp: String(xp),
+    solutionPenaltyXp: String(solutionPenaltyXp),
+    lockPenaltyToXp: solutionPenaltyXp === xp,
+  }
 }
 
 export function construirBorradorLeccion(lesson) {
@@ -469,6 +557,183 @@ export function aplicarBorradorLeccion(lesson, draft, courseId) {
       salidaGuiada: draft.salidaGuiada.trim() || lesson.challenge.salidaGuiada,
       executionNote: draft.executionNote.trim() || lesson.challenge.executionNote,
       successMessage: draft.successMessage.trim() || lesson.challenge.successMessage,
+    },
+  }
+}
+
+export function construirBorradorLeccionFlexible(lesson) {
+  const lessonChallenges = normalizarRetosLeccion(lesson)
+  const primaryChallenge = lessonChallenges[0] ?? {}
+  const usesMultipleChallenges =
+    Array.isArray(lesson.challenges) && lesson.challenges.length > 0
+      ? true
+      : lessonChallenges.length > 1
+  const challengeDrafts = lessonChallenges.map((challenge, index) =>
+    crearBorradorReto(challenge, index, lesson.id),
+  )
+  const lessonXp = lessonChallenges.reduce(
+    (total, challenge) => total + parsearNumeroNoNegativo(challenge.xp, 0),
+    0,
+  )
+
+  return {
+    title: lesson.title,
+    duration: lesson.duration,
+    xp: String(lessonXp || (lesson.xp ?? 120)),
+    objective: lesson.objective,
+    videoTitle: lesson.resources.videoTitle,
+    videoUrl: lesson.resources.videoUrl,
+    documentationLinksText: serializarEnlacesDocumentacion(lesson.resources.documentationLinks),
+    exampleTitle: lesson.resources.exampleTitle,
+    exampleCode: lesson.resources.exampleCode,
+    supportNote: lesson.resources.supportNote,
+    imageUrl: lesson.resources.imageUrl ?? '',
+    supportBlocksJson: serializarJsonLegible(lesson.resources.bloquesApoyo ?? []),
+    supportLayoutJson: serializarLayoutApoyo(lesson.resources.supportLayout ?? []),
+    instructionsOverview: lesson.instructions.overview,
+    instructionsStepsText: (lesson.instructions.steps ?? []).join('\n'),
+    instructionsHint: lesson.instructions.hint,
+    runtimeMode: primaryChallenge.runtimeMode ?? 'guided',
+    exerciseType: primaryChallenge.exerciseType ?? 'Completar codigo',
+    challengeTitle: primaryChallenge.title ?? '',
+    prompt: primaryChallenge.prompt ?? '',
+    starterCode: primaryChallenge.starterCode ?? '',
+    editorHeight: primaryChallenge.editorHeight ?? '310px',
+    expectedKeywordsText: (primaryChallenge.expectedKeywords ?? []).join(', '),
+    successCriteria: primaryChallenge.successCriteria ?? '',
+    expectedResult: primaryChallenge.expectedResult ?? '',
+    solutionCode: primaryChallenge.solutionCode ?? '',
+    solutionNote: primaryChallenge.solutionNote ?? '',
+    salidaGuiada: primaryChallenge.salidaGuiada ?? '',
+    executionNote: primaryChallenge.executionNote ?? '',
+    successMessage: primaryChallenge.successMessage ?? '',
+    usesMultipleChallenges,
+    challengeDrafts,
+    challengesJson: serializarJsonLegible(lessonChallenges),
+  }
+}
+
+export function aplicarBorradorLeccionFlexible(lesson, draft, courseId) {
+  const fallbackChallenges = normalizarRetosLeccion(lesson)
+  const rawChallengeDrafts =
+    Array.isArray(draft.challengeDrafts) && draft.challengeDrafts.length > 0
+      ? draft.usesMultipleChallenges
+        ? draft.challengeDrafts
+        : draft.challengeDrafts.slice(0, 1)
+      : fallbackChallenges.length > 0
+        ? fallbackChallenges.map((challenge, index) => crearBorradorReto(challenge, index, lesson.id))
+        : []
+  const normalizedChallenges = rawChallengeDrafts
+    .map((challengeDraft, index) => {
+      const fallbackChallenge = fallbackChallenges[index] ?? fallbackChallenges[0] ?? {}
+      const runtimeMode =
+        challengeDraft.runtimeMode === 'python' && permiteRuntimePython(courseId)
+          ? 'python'
+          : 'guided'
+      const xp = parsearNumeroNoNegativo(
+        challengeDraft.xp,
+        parsearNumeroNoNegativo(fallbackChallenge.xp, 0),
+      )
+      const solutionPenaltyXp = Math.min(
+        parsearNumeroNoNegativo(
+          challengeDraft.solutionPenaltyXp,
+          parsearNumeroNoNegativo(fallbackChallenge.solutionPenaltyXp, xp),
+        ),
+        xp,
+      )
+
+      return {
+        ...fallbackChallenge,
+        id: construirIdReto(lesson.id, challengeDraft, index),
+        runtimeMode,
+        exerciseType:
+          challengeDraft.exerciseType?.trim() ||
+          fallbackChallenge.exerciseType ||
+          'Completar codigo',
+        title:
+          challengeDraft.title?.trim() ||
+          fallbackChallenge.title ||
+          `Ejercicio ${index + 1}`,
+        prompt: challengeDraft.prompt?.trim() || fallbackChallenge.prompt || '',
+        starterCode: challengeDraft.starterCode ?? fallbackChallenge.starterCode ?? '',
+        editorHeight:
+          challengeDraft.editorHeight?.trim() || fallbackChallenge.editorHeight || '310px',
+        expectedKeywords: parsearListaSeparadaPorComas(challengeDraft.expectedKeywordsText ?? ''),
+        successCriteria:
+          challengeDraft.successCriteria?.trim() || fallbackChallenge.successCriteria || '',
+        expectedResult:
+          challengeDraft.expectedResult?.trim() || fallbackChallenge.expectedResult || '',
+        solutionCode:
+          challengeDraft.solutionCode?.trim() || fallbackChallenge.solutionCode || '',
+        solutionNote:
+          challengeDraft.solutionNote?.trim() || fallbackChallenge.solutionNote || '',
+        salidaGuiada:
+          challengeDraft.salidaGuiada?.trim() || fallbackChallenge.salidaGuiada || '',
+        executionNote:
+          challengeDraft.executionNote?.trim() || fallbackChallenge.executionNote || '',
+        successMessage:
+          challengeDraft.successMessage?.trim() || fallbackChallenge.successMessage || '',
+        xp,
+        solutionPenaltyXp,
+      }
+    })
+    .filter(Boolean)
+  const lessonXp =
+    normalizedChallenges.reduce((total, challenge) => total + (challenge.xp ?? 0), 0) ||
+    parsearNumeroNoNegativo(draft.xp, lesson.xp)
+
+  const nextLessonBase = {
+    ...lesson,
+    title: draft.title.trim() || lesson.title,
+    duration: draft.duration.trim() || lesson.duration,
+    xp: lessonXp,
+    objective: draft.objective.trim() || lesson.objective,
+    resources: {
+      ...lesson.resources,
+      videoTitle: draft.videoTitle.trim() || lesson.resources.videoTitle,
+      videoUrl: draft.videoUrl.trim() || lesson.resources.videoUrl,
+      documentationLinks: parsearEnlacesDocumentacion(draft.documentationLinksText),
+      exampleTitle: draft.exampleTitle.trim() || lesson.resources.exampleTitle,
+      exampleCode: draft.exampleCode,
+      supportNote: draft.supportNote.trim() || lesson.resources.supportNote,
+      imageUrl: draft.imageUrl?.trim() ?? '',
+      bloquesApoyo: parsearJsonConRespaldo(
+        draft.supportBlocksJson,
+        lesson.resources.bloquesApoyo ?? [],
+      ),
+      supportLayout: parsearLayoutApoyo(
+        draft.supportLayoutJson,
+        lesson.resources.supportLayout ?? [],
+      ),
+    },
+    instructions: {
+      overview: draft.instructionsOverview.trim() || lesson.instructions.overview,
+      steps: parsearListaMultilinea(draft.instructionsStepsText),
+      hint: draft.instructionsHint.trim() || lesson.instructions.hint,
+    },
+  }
+
+  if (draft.usesMultipleChallenges || normalizedChallenges.length > 1) {
+    const restLesson = { ...nextLessonBase }
+    delete restLesson.challenge
+
+    return {
+      ...restLesson,
+      challenges: normalizedChallenges,
+    }
+  }
+
+  const restLesson = { ...nextLessonBase }
+  delete restLesson.challenges
+
+  return {
+    ...restLesson,
+    challenge: normalizedChallenges[0] ?? {
+      ...(lesson.challenge ?? {}),
+      id: construirIdReto(lesson.id, lesson.challenge, 0),
+      runtimeMode: permiteRuntimePython(courseId) ? 'python' : 'guided',
+      xp: lessonXp,
+      solutionPenaltyXp: lessonXp,
     },
   }
 }
@@ -900,7 +1165,11 @@ export function actualizarLeccionEnContenido(content, courseId, unitId, lessonId
     return nextContent
   }
 
-  unit.lessons[lessonIndex] = aplicarBorradorLeccion(unit.lessons[lessonIndex], draft, courseId)
+  unit.lessons[lessonIndex] = aplicarBorradorLeccionFlexible(
+    unit.lessons[lessonIndex],
+    draft,
+    courseId,
+  )
   marcarCursoGestionadoCms(nextContent, courseId)
   return nextContent
 }

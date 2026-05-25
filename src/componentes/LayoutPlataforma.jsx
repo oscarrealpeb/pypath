@@ -18,7 +18,7 @@ export function LayoutPlataforma() {
   const { user, progress } = useEstadoApp()
   const { logout } = useAccionesApp()
   const [dismissedUsernameDialogKey, setDismissedUsernameDialogKey] = useState('')
-  const stats = obtenerEstadisticasGamificadas(progress.completedLessons)
+  const stats = obtenerEstadisticasGamificadas(progress)
   const usernameDialogKey = `${user?.id ?? 'guest'}:${user?.name ?? ''}:${
     user?.nameAutoAssigned ? 'auto' : 'manual'
   }`

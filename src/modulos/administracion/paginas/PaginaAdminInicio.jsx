@@ -20,13 +20,14 @@ export function PaginaAdminInicio() {
       <Tarjeta accent className="space-y-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="space-y-4">
-            <p className="eyebrow">Administración</p>
+            <p className="eyebrow">Administración / Resumen</p>
             <h1 className="font-display text-4xl font-semibold text-foam">
-              Panel de control de la plataforma
+              Panel general de la plataforma
             </h1>
             <p className="max-w-3xl text-lg leading-8 text-mute">
-              Desde aquí puedes crear y publicar contenido, revisar usuarios y ver métricas
-              básicas de uso sin tocar archivos a mano.
+              Vista rápida del estado actual de PyPath. Este resumen reutiliza datos ya
+              sincronizados del panel para no disparar lecturas extra en Firebase por cada
+              tarjeta.
             </p>
           </div>
 
@@ -34,11 +35,59 @@ export function PaginaAdminInicio() {
         </div>
       </Tarjeta>
 
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Usuarios totales</p>
+          <p className="font-display text-3xl font-semibold text-foam">{metrics.totalUsers}</p>
+        </Tarjeta>
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Activas</p>
+          <p className="font-display text-3xl font-semibold text-foam">{metrics.activeUsers}</p>
+        </Tarjeta>
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Deshabilitadas</p>
+          <p className="font-display text-3xl font-semibold text-foam">
+            {metrics.disabledUsers}
+          </p>
+        </Tarjeta>
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Admins</p>
+          <p className="font-display text-3xl font-semibold text-foam">{metrics.adminUsers}</p>
+        </Tarjeta>
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Ingresos 7 días</p>
+          <p className="font-display text-3xl font-semibold text-foam">
+            {metrics.usersWithRecentSignIn}
+          </p>
+        </Tarjeta>
         <Tarjeta className="space-y-2">
           <p className="text-xs uppercase tracking-[0.24em] text-mute">Cursos editables</p>
           <p className="font-display text-3xl font-semibold text-foam">{content.cursos.length}</p>
         </Tarjeta>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Estudiantes</p>
+          <p className="font-display text-3xl font-semibold text-foam">{metrics.studentUsers}</p>
+        </Tarjeta>
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Accesos con correo</p>
+          <p className="font-display text-3xl font-semibold text-foam">{metrics.emailUsers}</p>
+        </Tarjeta>
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Accesos con Google</p>
+          <p className="font-display text-3xl font-semibold text-foam">{metrics.googleUsers}</p>
+        </Tarjeta>
+        <Tarjeta className="space-y-2">
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Correos verificados</p>
+          <p className="font-display text-3xl font-semibold text-foam">
+            {metrics.verifiedEmailUsers}
+          </p>
+        </Tarjeta>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-3">
         <Tarjeta className="space-y-2">
           <p className="text-xs uppercase tracking-[0.24em] text-mute">Unidades</p>
           <p className="font-display text-3xl font-semibold text-foam">{totalUnits}</p>
@@ -48,20 +97,22 @@ export function PaginaAdminInicio() {
           <p className="font-display text-3xl font-semibold text-foam">{totalLessons}</p>
         </Tarjeta>
         <Tarjeta className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.24em] text-mute">Usuarios activos</p>
-          <p className="font-display text-3xl font-semibold text-foam">{metrics.activeUsers}</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Cursos con avance</p>
+          <p className="font-display text-3xl font-semibold text-foam">
+            {metrics.coursePopularity.filter((course) => course.engagedUsers > 0).length}
+          </p>
         </Tarjeta>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <Tarjeta className="space-y-4">
-          <p className="eyebrow">CMS</p>
+          <p className="eyebrow">Contenido</p>
           <h2 className="font-display text-2xl font-semibold text-foam">
             Crear cursos, unidades y lecciones
           </h2>
           <p className="text-mute">
-            La parte central del backlog ya está cubierta con un editor visual para títulos,
-            videos, documentación, ejemplos, imágenes y retos.
+            Gestiona títulos, teoría, videos, documentación, ejemplos, ejercicios y
+            evaluaciones desde el CMS visual del panel.
           </p>
           <Boton variant="secondary" onClick={() => navigate('/admin/contenido')}>
             Ir a contenido
@@ -71,11 +122,11 @@ export function PaginaAdminInicio() {
         <Tarjeta className="space-y-4">
           <p className="eyebrow">Usuarios</p>
           <h2 className="font-display text-2xl font-semibold text-foam">
-            Gestión de acceso y progreso
+            Roles, estados y progreso
           </h2>
           <p className="text-mute">
-            Revisa cuentas, cambia roles, deshabilita usuarios y marca reinicios de
-            contraseña para pruebas de administración.
+            Revisa cuentas, cambia roles, deshabilita o reactiva accesos y consulta el avance,
+            el XP y la liga de cada persona.
           </p>
           <Boton variant="secondary" onClick={() => navigate('/admin/usuarios')}>
             Ir a usuarios
@@ -85,11 +136,11 @@ export function PaginaAdminInicio() {
         <Tarjeta className="space-y-4">
           <p className="eyebrow">Métricas</p>
           <h2 className="font-display text-2xl font-semibold text-foam">
-            Resumen rápido del uso
+            Señales rápidas de uso
           </h2>
           <p className="text-mute">
-            Consulta usuarios activos, cuentas deshabilitadas, cursos con más tracción y
-            actividad sincronizada de la plataforma.
+            Consulta tracción por curso y eventos recientes solo cuando entras a la vista de
+            métricas, para mantener controlado el consumo de lecturas.
           </p>
           <Boton variant="secondary" onClick={() => navigate('/admin/metricas')}>
             Ir a métricas

@@ -60,6 +60,10 @@ import {
 import { actualizarSnapshotContenido } from '../../contenido/servicios/repositorioContenido.js'
 import { crearIntentoDiagnostico } from '../../diagnostico/servicios/servicioDiagnostico.js'
 import {
+  obtenerEjerciciosLeccion,
+  obtenerRegistroLeccion,
+} from '../../cursos/selectores/selectoresCursos.js'
+import {
   construirEstadoUsuarioDesdePerfil,
   crearEstadoDiagnosticoInicial,
   crearEstadoUsuarioInicial,
@@ -71,6 +75,95 @@ import {
   guardarEstadoApp,
 } from '../servicios/servicioEstadoApp.js'
 import { ContextoAccionesApp, ContextoEstadoApp } from './ContextosEstadoApp.js'
+
+function normalizarListaIds(items = []) {
+  return Array.from(
+    new Set(
+      (Array.isArray(items) ? items : [])
+        .filter((item) => typeof item === 'string')
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  )
+}
+
+function actualizarProgresoEjercicio(currentProgress, { lessonId, exerciseId, lessonExerciseIds, mode }) {
+  const completedExercises = normalizarListaIds(currentProgress.completedExercises)
+  const revealedSolutionExercises = normalizarListaIds(currentProgress.revealedSolutionExercises)
+  const completedLessons = normalizarListaIds(currentProgress.completedLessons)
+  const normalizedLessonExerciseIds = normalizarListaIds(lessonExerciseIds)
+  const lessonExerciseSnapshots = {
+    ...(currentProgress.lessonExerciseSnapshots ?? {}),
+  }
+  const unitLessonSnapshots = {
+    ...(currentProgress.unitLessonSnapshots ?? {}),
+  }
+  const courseUnitSnapshots = {
+    ...(currentProgress.courseUnitSnapshots ?? {}),
+  }
+  const lessonRecord = obtenerRegistroLeccion(lessonId)
+  const courseId = lessonRecord?.course.id ?? null
+  const unitId = lessonRecord?.unit.id ?? null
+  const currentLessonIds = normalizarListaIds(
+    lessonRecord?.unit?.lessons.map((lesson) => lesson.id) ?? [],
+  )
+  const currentUnitIds = normalizarListaIds(
+    lessonRecord?.course?.units.map((unit) => unit.id) ?? [],
+  )
+
+  if (courseId && !Array.isArray(courseUnitSnapshots[courseId])) {
+    courseUnitSnapshots[courseId] = currentUnitIds
+  }
+
+  if (unitId && !Array.isArray(unitLessonSnapshots[unitId])) {
+    unitLessonSnapshots[unitId] = currentLessonIds
+  }
+
+  if (mode === 'complete') {
+    if (
+      completedExercises.includes(exerciseId) ||
+      revealedSolutionExercises.includes(exerciseId)
+    ) {
+      return currentProgress
+    }
+
+    completedExercises.push(exerciseId)
+  }
+
+  if (mode === 'reveal') {
+    if (
+      revealedSolutionExercises.includes(exerciseId) ||
+      completedExercises.includes(exerciseId)
+    ) {
+      return currentProgress
+    }
+
+    revealedSolutionExercises.push(exerciseId)
+  }
+
+  const resolvedExerciseIds = new Set([...completedExercises, ...revealedSolutionExercises])
+  const lessonResolved =
+    normalizedLessonExerciseIds.length > 0 &&
+    normalizedLessonExerciseIds.every((id) => resolvedExerciseIds.has(id))
+
+  if (lessonResolved && !completedLessons.includes(lessonId)) {
+    completedLessons.push(lessonId)
+  }
+
+  if (lessonResolved && normalizedLessonExerciseIds.length > 0) {
+    lessonExerciseSnapshots[lessonId] = normalizedLessonExerciseIds
+  }
+
+  return {
+    ...currentProgress,
+    completedLessons,
+    completedExercises,
+    revealedSolutionExercises,
+    lessonExerciseSnapshots,
+    unitLessonSnapshots,
+    courseUnitSnapshots,
+  }
+}
 
 function createActivityEntry(type, payload = {}) {
   return {
@@ -376,6 +469,69 @@ function reducer(state, action) {
       )
     }
 
+    case 'COMPLETE_EXERCISE': {
+      const nextState = withUpdatedCurrentUserState(state, (currentUserState) => ({
+        ...currentUserState,
+        progress: actualizarProgresoEjercicio(currentUserState.progress, {
+          lessonId: action.payload.lessonId,
+          exerciseId: action.payload.exerciseId,
+          lessonExerciseIds: action.payload.lessonExerciseIds,
+          mode: 'complete',
+        }),
+      }))
+
+      return appendActivity(
+        nextState,
+        createActivityEntry('exercise_completed', {
+          userId: state.user?.id,
+          lessonId: action.payload.lessonId,
+          exerciseId: action.payload.exerciseId,
+        }),
+      )
+    }
+
+    case 'REVEAL_EXERCISE_SOLUTION': {
+      const nextState = withUpdatedCurrentUserState(state, (currentUserState) => ({
+        ...currentUserState,
+        progress: actualizarProgresoEjercicio(currentUserState.progress, {
+          lessonId: action.payload.lessonId,
+          exerciseId: action.payload.exerciseId,
+          lessonExerciseIds: action.payload.lessonExerciseIds,
+          mode: 'reveal',
+        }),
+      }))
+
+      return appendActivity(
+        nextState,
+        createActivityEntry('exercise_solution_revealed', {
+          userId: state.user?.id,
+          lessonId: action.payload.lessonId,
+          exerciseId: action.payload.exerciseId,
+          penaltyXp: action.payload.penaltyXp ?? 0,
+        }),
+      )
+    }
+
+    case 'ENSURE_PROGRESS_SNAPSHOTS':
+      return withUpdatedCurrentUserState(state, (currentUserState) => ({
+        ...currentUserState,
+        progress: {
+          ...currentUserState.progress,
+          lessonExerciseSnapshots: {
+            ...(currentUserState.progress.lessonExerciseSnapshots ?? {}),
+            ...(action.payload.lessonExerciseSnapshots ?? {}),
+          },
+          unitLessonSnapshots: {
+            ...(currentUserState.progress.unitLessonSnapshots ?? {}),
+            ...(action.payload.unitLessonSnapshots ?? {}),
+          },
+          courseUnitSnapshots: {
+            ...(currentUserState.progress.courseUnitSnapshots ?? {}),
+            ...(action.payload.courseUnitSnapshots ?? {}),
+          },
+        },
+      }))
+
     case 'COMPLETE_UNIT_ASSESSMENT': {
       const nextState = withUpdatedCurrentUserState(state, (currentUserState) => ({
         ...currentUserState,
@@ -590,6 +746,75 @@ export function ProveedorEstadoApp({ children }) {
   useEffect(() => {
     actualizarSnapshotContenido(state.content)
   }, [state.content])
+
+  useEffect(() => {
+    if (!state.authReady || !state.user) {
+      return
+    }
+
+    const missingLessonExerciseSnapshots = {}
+    const missingUnitLessonSnapshots = {}
+    const missingCourseUnitSnapshots = {}
+
+    normalizarListaIds(state.progress.completedLessons).forEach((lessonId) => {
+      const record = obtenerRegistroLeccion(lessonId)
+
+      if (!record) {
+        return
+      }
+
+      const existingExerciseSnapshot = state.progress.lessonExerciseSnapshots?.[lessonId]
+      const existingUnitSnapshot = state.progress.unitLessonSnapshots?.[record.unit.id]
+      const existingCourseSnapshot = state.progress.courseUnitSnapshots?.[record.course.id]
+      const exerciseIds = obtenerEjerciciosLeccion(record.lesson).map((exercise) => exercise.id)
+      const lessonIds = normalizarListaIds(record.unit.lessons.map((lesson) => lesson.id))
+      const unitIds = normalizarListaIds(record.course.units.map((unit) => unit.id))
+
+      if (
+        (!Array.isArray(existingExerciseSnapshot) || existingExerciseSnapshot.length === 0) &&
+        exerciseIds.length > 0
+      ) {
+        missingLessonExerciseSnapshots[lessonId] = exerciseIds
+      }
+
+      if (
+        (!Array.isArray(existingUnitSnapshot) || existingUnitSnapshot.length === 0) &&
+        lessonIds.length > 0
+      ) {
+        missingUnitLessonSnapshots[record.unit.id] = lessonIds
+      }
+
+      if (
+        (!Array.isArray(existingCourseSnapshot) || existingCourseSnapshot.length === 0) &&
+        unitIds.length > 0
+      ) {
+        missingCourseUnitSnapshots[record.course.id] = unitIds
+      }
+    })
+
+    if (
+      Object.keys(missingLessonExerciseSnapshots).length > 0 ||
+      Object.keys(missingUnitLessonSnapshots).length > 0 ||
+      Object.keys(missingCourseUnitSnapshots).length > 0
+    ) {
+      dispatch({
+        type: 'ENSURE_PROGRESS_SNAPSHOTS',
+        payload: {
+          lessonExerciseSnapshots: missingLessonExerciseSnapshots,
+          unitLessonSnapshots: missingUnitLessonSnapshots,
+          courseUnitSnapshots: missingCourseUnitSnapshots,
+        },
+      })
+    }
+  }, [
+    state.authReady,
+    state.content,
+    state.progress.completedLessons,
+    state.progress.courseUnitSnapshots,
+    state.progress.lessonExerciseSnapshots,
+    state.progress.unitLessonSnapshots,
+    state.user,
+  ])
 
   useEffect(() => {
     if (state.user) {
@@ -1204,6 +1429,20 @@ export function ProveedorEstadoApp({ children }) {
 
     completeLesson(lessonId) {
       dispatch({ type: 'COMPLETE_LESSON', payload: lessonId })
+    },
+
+    completeExercise(lessonId, exerciseId, lessonExerciseIds = []) {
+      dispatch({
+        type: 'COMPLETE_EXERCISE',
+        payload: { lessonId, exerciseId, lessonExerciseIds },
+      })
+    },
+
+    revealExerciseSolution(lessonId, exerciseId, lessonExerciseIds = [], penaltyXp = 0) {
+      dispatch({
+        type: 'REVEAL_EXERCISE_SOLUTION',
+        payload: { lessonId, exerciseId, lessonExerciseIds, penaltyXp },
+      })
     },
 
     completeUnitAssessment(assessmentId) {

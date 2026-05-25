@@ -28,11 +28,11 @@ export function PaginaAdminMetricas() {
           <p className="font-display text-3xl font-semibold text-foam">{metrics.totalUsers}</p>
         </Tarjeta>
         <Tarjeta className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.24em] text-mute">Activos</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Activas</p>
           <p className="font-display text-3xl font-semibold text-foam">{metrics.activeUsers}</p>
         </Tarjeta>
         <Tarjeta className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.24em] text-mute">Deshabilitados</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Deshabilitadas</p>
           <p className="font-display text-3xl font-semibold text-foam">
             {metrics.disabledUsers}
           </p>
@@ -42,9 +42,9 @@ export function PaginaAdminMetricas() {
           <p className="font-display text-3xl font-semibold text-foam">{metrics.adminUsers}</p>
         </Tarjeta>
         <Tarjeta className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.24em] text-mute">Actividad 7 días</p>
+          <p className="text-xs uppercase tracking-[0.24em] text-mute">Ingresos 7 días</p>
           <p className="font-display text-3xl font-semibold text-foam">
-            {metrics.usersWithRecentActivity}
+            {metrics.usersWithRecentSignIn}
           </p>
         </Tarjeta>
       </div>
@@ -106,8 +106,8 @@ export function PaginaAdminMetricas() {
               ))
             ) : (
               <div className="rounded-2xl border border-border/80 bg-white/5 px-4 py-4 text-sm text-mute">
-                Aún no hay actividad sincronizada. Inicia sesión, completa una misión o
-                gestiona usuarios y contenido desde una sesión autenticada para poblar esta vista.
+                Aún no hay actividad sincronizada. Inicia sesión, completa una misión o gestiona
+                usuarios y contenido desde una sesión autenticada para poblar esta vista.
               </div>
             )}
           </div>

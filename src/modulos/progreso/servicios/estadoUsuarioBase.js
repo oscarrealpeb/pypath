@@ -10,8 +10,13 @@ export function crearEstadoDiagnosticoInicial() {
 export function crearProgresoInicial() {
   return {
     completedLessons: [],
+    completedExercises: [],
     completedUnitAssessments: [],
     completedCourseAssessments: [],
+    revealedSolutionExercises: [],
+    lessonExerciseSnapshots: {},
+    unitLessonSnapshots: {},
+    courseUnitSnapshots: {},
   }
 }
 
@@ -35,8 +40,22 @@ export function normalizarProgreso(value) {
     ...crearProgresoInicial(),
     ...(value ?? {}),
     completedLessons: value?.completedLessons ?? [],
+    completedExercises: value?.completedExercises ?? [],
     completedUnitAssessments: value?.completedUnitAssessments ?? [],
     completedCourseAssessments: value?.completedCourseAssessments ?? [],
+    revealedSolutionExercises: value?.revealedSolutionExercises ?? [],
+    lessonExerciseSnapshots:
+      value?.lessonExerciseSnapshots && typeof value.lessonExerciseSnapshots === 'object'
+        ? value.lessonExerciseSnapshots
+        : {},
+    unitLessonSnapshots:
+      value?.unitLessonSnapshots && typeof value.unitLessonSnapshots === 'object'
+        ? value.unitLessonSnapshots
+        : {},
+    courseUnitSnapshots:
+      value?.courseUnitSnapshots && typeof value.courseUnitSnapshots === 'object'
+        ? value.courseUnitSnapshots
+        : {},
   }
 }
 

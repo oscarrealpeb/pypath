@@ -6,7 +6,7 @@ import {
   actualizarUnidadEnContenido,
   construirBorradorCurso,
   construirBorradorEvaluacion,
-  construirBorradorLeccion,
+  construirBorradorLeccionFlexible as construirBorradorLeccion,
   materializarCursoCmsEnContenido,
   permiteRuntimePython,
 } from '../servicios/servicioAdminContenido.js'
@@ -175,10 +175,6 @@ function CourseEditor({
 }) {
   const [draft, setDraft] = useState(() => construirBorradorCurso(course, meta))
   const publicationLabel = meta.statusLabel?.trim() || 'Sin estado'
-
-  useEffect(() => {
-    setDraft(construirBorradorCurso(course, meta))
-  }, [course, meta])
 
   return (
     <Tarjeta className="space-y-5">
@@ -560,13 +556,257 @@ function LessonEditor({
   const supportsPythonRuntime = permiteRuntimePython(courseId)
   const visibleRuntimeMode = supportsPythonRuntime ? draft.runtimeMode : 'guided'
   const usesMultipleChallenges = draft.usesMultipleChallenges
+  const challengeDrafts = useMemo(() => draft.challengeDrafts ?? [], [draft.challengeDrafts])
+  const lessonXpTotal = useMemo(
+    () =>
+      challengeDrafts.reduce((total, challenge) => {
+        const xp = Number(challenge.xp)
+        return total + (Number.isFinite(xp) && xp >= 0 ? xp : 0)
+      }, 0),
+    [challengeDrafts],
+  )
 
-  useEffect(() => {
-    setDraft(construirBorradorLeccion(lesson))
-  }, [lesson])
+  function serializarChallengeDrafts(challenges) {
+    return JSON.stringify(
+      challenges.map((challenge) => ({
+        id: challenge.id,
+        title: challenge.title,
+        exerciseType: challenge.exerciseType,
+        runtimeMode: supportsPythonRuntime ? challenge.runtimeMode : 'guided',
+        prompt: challenge.prompt,
+        starterCode: challenge.starterCode,
+        editorHeight: challenge.editorHeight,
+        expectedKeywords: (challenge.expectedKeywordsText ?? '')
+          .split(',')
+          .map((item) => item.trim())
+          .filter(Boolean),
+        successCriteria: challenge.successCriteria,
+        expectedResult: challenge.expectedResult,
+        solutionCode: challenge.solutionCode,
+        solutionNote: challenge.solutionNote,
+        salidaGuiada: challenge.salidaGuiada,
+        executionNote: challenge.executionNote,
+        successMessage: challenge.successMessage,
+        xp: Number(challenge.xp) || 0,
+        solutionPenaltyXp: Number(challenge.solutionPenaltyXp) || 0,
+      })),
+      null,
+      2,
+    )
+  }
+
+  function construirChallengeDraftUi(challenge, index, mode = 'guided') {
+    const xp = Number(challenge.xp ?? 0) || 0
+    const solutionPenaltyXp =
+      challenge.lockPenaltyToXp === true
+        ? xp
+        : Number(challenge.solutionPenaltyXp ?? challenge.xp ?? 0) || 0
+
+    return {
+      id: challenge.id || `${lesson.id}::exercise::json::${index + 1}`,
+      title: challenge.title ?? `Ejercicio ${index + 1}`,
+      exerciseType: challenge.exerciseType ?? 'Completar código',
+      runtimeMode: supportsPythonRuntime ? challenge.runtimeMode ?? mode : 'guided',
+      prompt: challenge.prompt ?? '',
+      starterCode: challenge.starterCode ?? '',
+      editorHeight: challenge.editorHeight ?? '310px',
+      expectedKeywordsText: Array.isArray(challenge.expectedKeywords)
+        ? challenge.expectedKeywords.join(', ')
+        : (challenge.expectedKeywordsText ?? ''),
+      successCriteria: challenge.successCriteria ?? '',
+      expectedResult: challenge.expectedResult ?? '',
+      solutionCode: challenge.solutionCode ?? '',
+      solutionNote: challenge.solutionNote ?? '',
+      salidaGuiada: challenge.salidaGuiada ?? '',
+      executionNote: challenge.executionNote ?? '',
+      successMessage: challenge.successMessage ?? '',
+      xp: String(xp),
+      solutionPenaltyXp: String(solutionPenaltyXp),
+      lockPenaltyToXp:
+        challenge.lockPenaltyToXp === true || solutionPenaltyXp === xp,
+    }
+  }
+
+  function sincronizarChallengeDrafts(current, nextChallenges, overrides = {}) {
+    const firstChallenge = nextChallenges[0] ?? current.challengeDrafts?.[0] ?? {}
+
+    return {
+      ...current,
+      challengeDrafts: nextChallenges,
+      challengesJson: serializarChallengeDrafts(nextChallenges),
+      runtimeMode: supportsPythonRuntime ? firstChallenge.runtimeMode ?? current.runtimeMode : 'guided',
+      exerciseType: firstChallenge.exerciseType ?? current.exerciseType,
+      challengeTitle: firstChallenge.title ?? current.challengeTitle,
+      prompt: firstChallenge.prompt ?? current.prompt,
+      starterCode: firstChallenge.starterCode ?? current.starterCode,
+      editorHeight: firstChallenge.editorHeight ?? current.editorHeight,
+      expectedKeywordsText: firstChallenge.expectedKeywordsText ?? current.expectedKeywordsText,
+      successCriteria: firstChallenge.successCriteria ?? current.successCriteria,
+      expectedResult: firstChallenge.expectedResult ?? current.expectedResult,
+      solutionCode: firstChallenge.solutionCode ?? current.solutionCode,
+      solutionNote: firstChallenge.solutionNote ?? current.solutionNote,
+      salidaGuiada: firstChallenge.salidaGuiada ?? current.salidaGuiada,
+      executionNote: firstChallenge.executionNote ?? current.executionNote,
+      successMessage: firstChallenge.successMessage ?? current.successMessage,
+      ...overrides,
+    }
+  }
 
   function setDraftField(field, value) {
-    setDraft((current) => ({ ...current, [field]: value }))
+    setDraft((current) => {
+      const nextDraft = { ...current, [field]: value }
+      const firstChallenge = current.challengeDrafts?.[0]
+
+      if (!firstChallenge) {
+        return nextDraft
+      }
+
+      const challengeFieldMap = {
+        runtimeMode: 'runtimeMode',
+        exerciseType: 'exerciseType',
+        challengeTitle: 'title',
+        prompt: 'prompt',
+        starterCode: 'starterCode',
+        editorHeight: 'editorHeight',
+        expectedKeywordsText: 'expectedKeywordsText',
+        successCriteria: 'successCriteria',
+        expectedResult: 'expectedResult',
+        solutionCode: 'solutionCode',
+        solutionNote: 'solutionNote',
+        salidaGuiada: 'salidaGuiada',
+        executionNote: 'executionNote',
+        successMessage: 'successMessage',
+      }
+      const challengeField = challengeFieldMap[field]
+
+      if (!challengeField) {
+        if (field !== 'challengesJson') {
+          return nextDraft
+        }
+
+        try {
+          const parsedChallenges = JSON.parse(value)
+
+          if (!Array.isArray(parsedChallenges)) {
+            return nextDraft
+          }
+
+          return {
+            ...nextDraft,
+            usesMultipleChallenges: parsedChallenges.length > 1 || current.usesMultipleChallenges,
+            challengeDrafts: parsedChallenges.map((challenge, index) =>
+              construirChallengeDraftUi(
+                challenge,
+                index,
+                current.runtimeMode ?? 'guided',
+              ),
+            ),
+          }
+        } catch {
+          return nextDraft
+        }
+      }
+
+      return {
+        ...nextDraft,
+        challengeDrafts: current.challengeDrafts.map((challenge, index) =>
+          index === 0 ? { ...challenge, [challengeField]: value } : challenge,
+        ),
+        challengesJson: serializarChallengeDrafts(
+          current.challengeDrafts.map((challenge, index) =>
+            index === 0 ? { ...challenge, [challengeField]: value } : challenge,
+          ),
+        ),
+      }
+    })
+  }
+
+  function updateChallengeDraft(index, patch) {
+    setDraft((current) => {
+      const nextChallenges = current.challengeDrafts.map((challenge, challengeIndex) => {
+        if (challengeIndex !== index) {
+          return challenge
+        }
+
+        const nextChallenge = { ...challenge, ...patch }
+
+        if (patch.lockPenaltyToXp === true || (challenge.lockPenaltyToXp && 'xp' in patch)) {
+          nextChallenge.solutionPenaltyXp = String(Number(nextChallenge.xp) || 0)
+        }
+
+        if (patch.lockPenaltyToXp === false && !nextChallenge.solutionPenaltyXp) {
+          nextChallenge.solutionPenaltyXp = challenge.solutionPenaltyXp
+        }
+
+        return nextChallenge
+      })
+
+      return sincronizarChallengeDrafts(current, nextChallenges)
+    })
+  }
+
+  function addChallengeDraft() {
+    setDraft((current) => {
+      const nextIndex = current.challengeDrafts.length
+      const firstChallenge = current.challengeDrafts[0] ?? {}
+      const nextChallenge = {
+        id: `${lesson.id}::exercise::draft::${Date.now()}-${nextIndex + 1}`,
+        title: `Ejercicio ${nextIndex + 1}`,
+        exerciseType: firstChallenge.exerciseType ?? 'Completar código',
+        runtimeMode: supportsPythonRuntime
+          ? firstChallenge.runtimeMode ?? current.runtimeMode ?? 'guided'
+          : 'guided',
+        prompt: '',
+        starterCode: '',
+        editorHeight: '310px',
+        expectedKeywordsText: '',
+        successCriteria: '',
+        expectedResult: '',
+        solutionCode: '',
+        solutionNote: '',
+        salidaGuiada: '',
+        executionNote: '',
+        successMessage: '',
+        xp: '0',
+        solutionPenaltyXp: '0',
+        lockPenaltyToXp: true,
+      }
+      const nextChallenges = [...current.challengeDrafts, nextChallenge]
+
+      return sincronizarChallengeDrafts(current, nextChallenges, {
+        usesMultipleChallenges: true,
+      })
+    })
+  }
+
+  function removeChallengeDraft(index) {
+    setDraft((current) => {
+      const nextChallenges = current.challengeDrafts.filter(
+        (_, challengeIndex) => challengeIndex !== index,
+      )
+
+      return sincronizarChallengeDrafts(current, nextChallenges, {
+        usesMultipleChallenges: nextChallenges.length > 1,
+      })
+    })
+  }
+
+  function moveChallengeDraft(index, direction) {
+    setDraft((current) => {
+      const targetIndex = index + direction
+
+      if (targetIndex < 0 || targetIndex >= current.challengeDrafts.length) {
+        return current
+      }
+
+      const nextChallenges = [...current.challengeDrafts]
+      ;[nextChallenges[index], nextChallenges[targetIndex]] = [
+        nextChallenges[targetIndex],
+        nextChallenges[index],
+      ]
+
+      return sincronizarChallengeDrafts(current, nextChallenges)
+    })
   }
 
   function handleImageUpload(event) {
@@ -624,9 +864,14 @@ function LessonEditor({
           onChange={(event) => setDraftField('duration', event.target.value)}
         />
         <InputField
-          label="XP"
-          value={draft.xp}
-          onChange={(event) => setDraftField('xp', event.target.value)}
+          label="XP total de la lección"
+          value={String(lessonXpTotal)}
+          help={{
+            title: 'XP total de la lección',
+            body:
+              'Este valor no se edita aquí. Sale de sumar el XP de todos los ejercicios configurados en la sección de reto.',
+          }}
+          disabled
         />
         <label className="block space-y-2">
           <FieldLabel
@@ -805,6 +1050,263 @@ function LessonEditor({
             <h3 className="mt-3 font-display text-xl font-semibold text-foam">Challenge</h3>
           </div>
 
+          <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+            <label className="block space-y-2">
+              <FieldLabel
+                label="Modo de ejercicios"
+                help={{
+                  title: 'Modo de ejercicios',
+                  body:
+                    'Puedes dejar la leccion con un ejercicio o convertirla en una secuencia con varios pasos. Para avanzar, la persona debe resolver todos los ejercicios requeridos.',
+                }}
+              />
+              <select
+                className="field-input"
+                value={usesMultipleChallenges ? 'multiple' : 'single'}
+                onChange={(event) =>
+                  setDraft((current) => {
+                    const wantsMultiple = event.target.value === 'multiple'
+                    const nextChallenges = wantsMultiple
+                      ? current.challengeDrafts
+                      : current.challengeDrafts.slice(0, 1)
+
+                    return sincronizarChallengeDrafts(current, nextChallenges, {
+                      usesMultipleChallenges: wantsMultiple,
+                    })
+                  })
+                }
+              >
+                <option value="single">Ejercicio único</option>
+                <option value="multiple">Varios ejercicios</option>
+              </select>
+            </label>
+
+            <div className="rounded-2xl border border-border/80 bg-white/5 p-4 text-sm text-mute">
+              <p className="font-semibold text-foam">Resumen del reto</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="status-chip">{challengeDrafts.length} ejercicios</span>
+                <span className="status-chip">{lessonXpTotal} XP totales</span>
+              </div>
+              <p className="mt-3 leading-6">
+                Cada ejercicio puede tener su propio XP y su propia penalización por revelar la
+                solución. El total de la lección sale de sumar esos valores.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {challengeDrafts.map((challenge, index) => (
+              <div
+                key={challenge.id || `${lesson.id}-challenge-${index}`}
+                className="rounded-2xl border border-border/80 bg-panel-2/50 p-4"
+              >
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.22em] text-mute">
+                      Ejercicio {index + 1}
+                    </p>
+                    <p className="mt-2 text-sm text-mute">
+                      Este bloque controla el XP, la penalizacion y el contenido del ejercicio.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Boton
+                      variant="ghost"
+                      disabled={index === 0}
+                      onClick={() => moveChallengeDraft(index, -1)}
+                    >
+                      Subir
+                    </Boton>
+                    <Boton
+                      variant="ghost"
+                      disabled={index === challengeDrafts.length - 1}
+                      onClick={() => moveChallengeDraft(index, 1)}
+                    >
+                      Bajar
+                    </Boton>
+                    <Boton
+                      variant="ghost"
+                      disabled={challengeDrafts.length === 1}
+                      onClick={() => removeChallengeDraft(index)}
+                    >
+                      Eliminar
+                    </Boton>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <InputField
+                    label="Título del ejercicio"
+                    value={challenge.title}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { title: event.target.value })
+                    }
+                  />
+                  <InputField
+                    label="Tipo de ejercicio"
+                    value={challenge.exerciseType}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { exerciseType: event.target.value })
+                    }
+                  />
+                  <label className="block space-y-2">
+                    <FieldLabel label="Modo de ejecucion" />
+                    <select
+                      className="field-input"
+                      value={supportsPythonRuntime ? challenge.runtimeMode : 'guided'}
+                      onChange={(event) =>
+                        updateChallengeDraft(index, { runtimeMode: event.target.value })
+                      }
+                    >
+                      <option value="guided">Guiado</option>
+                      {supportsPythonRuntime ? <option value="python">Python real</option> : null}
+                    </select>
+                  </label>
+                  <InputField
+                    label="Altura del editor"
+                    value={challenge.editorHeight}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { editorHeight: event.target.value })
+                    }
+                  />
+                  <InputField
+                    label="XP del ejercicio"
+                    value={challenge.xp}
+                    help={{
+                      title: 'XP del ejercicio',
+                      body:
+                        'Define cuánta experiencia gana la persona si resuelve este ejercicio. El total de la lección se recalcula automáticamente.',
+                    }}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { xp: event.target.value })
+                    }
+                  />
+                  <div className="space-y-3">
+                    <InputField
+                      label="Penalización por revelar solución"
+                      value={challenge.solutionPenaltyXp}
+                      help={{
+                        title: 'Penalización por revelar solución',
+                        body:
+                          'Por defecto puede ser igual al XP del ejercicio. Si desactivas la sincronización, puedes escribir una penalización distinta.',
+                      }}
+                      disabled={challenge.lockPenaltyToXp}
+                      onChange={(event) =>
+                        updateChallengeDraft(index, {
+                          solutionPenaltyXp: event.target.value,
+                        })
+                      }
+                    />
+                    <label className="flex items-center gap-3 rounded-2xl border border-border/70 bg-white/5 px-4 py-3 text-sm text-mute">
+                      <input
+                        type="checkbox"
+                        checked={challenge.lockPenaltyToXp}
+                        onChange={(event) =>
+                          updateChallengeDraft(index, {
+                            lockPenaltyToXp: event.target.checked,
+                          })
+                        }
+                      />
+                      <span>Usar el mismo XP del ejercicio como penalización</span>
+                    </label>
+                  </div>
+                  <TextareaField
+                    className="lg:col-span-2"
+                    label="Prompt"
+                    textareaClassName="min-h-24"
+                    value={challenge.prompt}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { prompt: event.target.value })
+                    }
+                  />
+                  <TextareaField
+                    className="lg:col-span-2"
+                    label="Starter code"
+                    textareaClassName="min-h-40 font-mono text-sm"
+                    value={challenge.starterCode}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { starterCode: event.target.value })
+                    }
+                  />
+                  <InputField
+                    label="Keywords (coma)"
+                    value={challenge.expectedKeywordsText}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, {
+                        expectedKeywordsText: event.target.value,
+                      })
+                    }
+                  />
+                  <InputField
+                    label="Resultado esperado"
+                    value={challenge.expectedResult}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { expectedResult: event.target.value })
+                    }
+                  />
+                  <InputField
+                    label="Salida guiada"
+                    value={challenge.salidaGuiada}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { salidaGuiada: event.target.value })
+                    }
+                  />
+                  <TextareaField
+                    className="lg:col-span-2"
+                    label="Criterio de exito"
+                    textareaClassName="min-h-24"
+                    value={challenge.successCriteria}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { successCriteria: event.target.value })
+                    }
+                  />
+                  <TextareaField
+                    className="lg:col-span-2"
+                    label="Solucion completa"
+                    textareaClassName="min-h-40 font-mono text-sm"
+                    value={challenge.solutionCode}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { solutionCode: event.target.value })
+                    }
+                  />
+                  <TextareaField
+                    className="lg:col-span-2"
+                    label="Explicacion de la solucion"
+                    textareaClassName="min-h-24"
+                    value={challenge.solutionNote}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { solutionNote: event.target.value })
+                    }
+                  />
+                  <TextareaField
+                    className="lg:col-span-2"
+                    label="Nota de ejecucion"
+                    textareaClassName="min-h-24"
+                    value={challenge.executionNote}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { executionNote: event.target.value })
+                    }
+                  />
+                  <TextareaField
+                    className="lg:col-span-2"
+                    label="Mensaje de exito"
+                    textareaClassName="min-h-24"
+                    value={challenge.successMessage}
+                    onChange={(event) =>
+                      updateChallengeDraft(index, { successMessage: event.target.value })
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+
+            {usesMultipleChallenges ? (
+              <Boton variant="secondary" onClick={addChallengeDraft}>
+                Agregar ejercicio
+              </Boton>
+            ) : null}
+          </div>
+
           {usesMultipleChallenges ? (
             <div className="space-y-4">
               <div className="rounded-2xl border border-primary/25 bg-primary/10 p-4 text-sm text-mute">
@@ -825,7 +1327,7 @@ function LessonEditor({
               />
             </div>
           ) : (
-            <div className="grid gap-4 lg:grid-cols-2">
+            <div className="hidden">
             <InputField
               label="Tipo de ejercicio"
               value={draft.exerciseType}
@@ -940,10 +1442,6 @@ function LessonEditor({
 
 function FinalAssessmentEditor({ assessment, isEditable, isSyncing, onSave }) {
   const [draft, setDraft] = useState(() => construirBorradorEvaluacion(assessment))
-
-  useEffect(() => {
-    setDraft(construirBorradorEvaluacion(assessment))
-  }, [assessment])
 
   return (
     <Tarjeta className="space-y-5">

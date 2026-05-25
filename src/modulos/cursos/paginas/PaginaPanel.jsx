@@ -71,7 +71,7 @@ export function PaginaPanel() {
     }) ??
     fundamentalsCourse
   const focusSummary = obtenerResumenCurso(focusCourse.id, progressWithAssessment)
-  const stats = obtenerEstadisticasGamificadas(progress.completedLessons)
+  const stats = obtenerEstadisticasGamificadas(progress)
   const recommendedStart = obtenerInicioRecomendado(null, onboarding.assessmentResult)
   const goalCourse = user?.goalCourseId ? obtenerCursoCatalogoPorId(user.goalCourseId) : null
   const goalCourseIsPublished = goalCourse?.status === 'live'

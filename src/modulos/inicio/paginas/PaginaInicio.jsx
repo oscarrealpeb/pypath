@@ -11,6 +11,10 @@ import {
   opcionesInteres,
   opcionesRol,
 } from '../../../datos/opcionesPerfilUsuario.js'
+import {
+  esUsuarioAdministrador,
+  tieneAccesoPortalAdminActivo,
+} from '../../autenticacion/servicios/servicioFirebaseAutenticacion.js'
 import { obtenerCatalogoCursos } from '../../contenido/servicios/repositorioContenido.js'
 import { useAccionesApp, useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
 import { obtenerCursoPorId } from '../../cursos/selectores/selectoresCursos.js'
@@ -150,7 +154,7 @@ function getStepCardTitle(course) {
 
 export function PaginaInicio() {
   const navigate = useNavigate()
-  const { user } = useEstadoApp()
+  const { authReady, user } = useEstadoApp()
   const { updateUserProfile } = useAccionesApp()
   const catalogoCursos = obtenerCatalogoCursos()
   const catalogoCursosPublicados = useMemo(
@@ -298,7 +302,15 @@ export function PaginaInicio() {
     document.getElementById('recomendador')?.scrollIntoView({ behavior: 'smooth' })
   }
 
-  const primaryCta = user ? '/dashboard' : '/register'
+  const panelPath = user
+    ? esUsuarioAdministrador(user)
+      ? tieneAccesoPortalAdminActivo()
+        ? '/admin/contenido'
+        : '/control'
+      : '/dashboard'
+    : '/register'
+  const showAuthenticatedCta = authReady && Boolean(user)
+  const showGuestCtas = authReady && !user
 
   return (
     <>
@@ -330,14 +342,14 @@ export function PaginaInicio() {
               >
                 Recomendador
               </a>
-              {user ? (
+              {showAuthenticatedCta ? (
                 <>
-                  <Boton size="sm" onClick={() => navigate(primaryCta)}>
+                  <Boton size="sm" onClick={() => navigate(panelPath)}>
                     Ir a mi panel
                   </Boton>
                   <SelectorTema />
                 </>
-              ) : (
+              ) : showGuestCtas ? (
                 <>
                   <Boton variant="ghost" size="sm" onClick={() => navigate('/login')}>
                     Entrar
@@ -347,6 +359,8 @@ export function PaginaInicio() {
                   </Boton>
                   <SelectorTema />
                 </>
+              ) : (
+                <SelectorTema />
               )}
             </nav>
           </div>
@@ -449,8 +463,11 @@ export function PaginaInicio() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
-                  <Boton size="lg" onClick={() => navigate(primaryCta)}>
-                    {user ? 'Seguir aprendiendo' : 'Crear cuenta y empezar'}
+                  <Boton
+                    size="lg"
+                    onClick={() => navigate(showAuthenticatedCta ? panelPath : '/register')}
+                  >
+                    {showAuthenticatedCta ? 'Seguir aprendiendo' : 'Crear cuenta y empezar'}
                   </Boton>
                   <Boton variant="secondary" size="lg" onClick={scrollToRecommender}>
                     Ver mi recomendación

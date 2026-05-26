@@ -19,7 +19,11 @@ export function RutaSoloPublica() {
   }
 
   if (esUsuarioAdministrador(user)) {
-    return <Navigate to={tieneAccesoPortalAdminActivo() ? '/admin/contenido' : '/control'} replace />
+    if (tieneAccesoPortalAdminActivo()) {
+      return <Navigate to="/admin/contenido" replace />
+    }
+
+    return <Outlet />
   }
 
   if (requiereVerificacionCorreo(user)) {

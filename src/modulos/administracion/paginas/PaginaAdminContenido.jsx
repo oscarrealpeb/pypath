@@ -1057,7 +1057,7 @@ function LessonEditor({
                 help={{
                   title: 'Modo de ejercicios',
                   body:
-                    'Puedes dejar la leccion con un ejercicio o convertirla en una secuencia con varios pasos. Para avanzar, la persona debe resolver todos los ejercicios requeridos.',
+                    'Puedes dejar la lección con un ejercicio o convertirla en una secuencia con varios pasos. Para avanzar, la persona debe resolver todos los ejercicios requeridos.',
                 }}
               />
               <select
@@ -1106,7 +1106,7 @@ function LessonEditor({
                       Ejercicio {index + 1}
                     </p>
                     <p className="mt-2 text-sm text-mute">
-                      Este bloque controla el XP, la penalizacion y el contenido del ejercicio.
+                      Este bloque controla el XP, la penalización y el contenido del ejercicio.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -1150,7 +1150,7 @@ function LessonEditor({
                     }
                   />
                   <label className="block space-y-2">
-                    <FieldLabel label="Modo de ejecucion" />
+                    <FieldLabel label="Modo de ejecución" />
                     <select
                       className="field-input"
                       value={supportsPythonRuntime ? challenge.runtimeMode : 'guided'}
@@ -1271,7 +1271,7 @@ function LessonEditor({
                   />
                   <TextareaField
                     className="lg:col-span-2"
-                    label="Explicacion de la solucion"
+                    label="Explicación de la solución"
                     textareaClassName="min-h-24"
                     value={challenge.solutionNote}
                     onChange={(event) =>
@@ -1280,7 +1280,7 @@ function LessonEditor({
                   />
                   <TextareaField
                     className="lg:col-span-2"
-                    label="Nota de ejecucion"
+                    label="Nota de ejecución"
                     textareaClassName="min-h-24"
                     value={challenge.executionNote}
                     onChange={(event) =>

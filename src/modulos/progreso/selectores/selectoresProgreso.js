@@ -499,7 +499,7 @@ export function obtenerSiguientePasoCurso(courseId, progress) {
           type: 'lesson',
           lessonId: lesson.id,
           title: lesson.title,
-          label: 'Continuar mision',
+          label: 'Continuar misión',
           path: `/lesson/${lesson.id}`,
         }
       }
@@ -517,7 +517,7 @@ export function obtenerSiguientePasoCurso(courseId, progress) {
         courseId: course.id,
         unitId: unit.id,
         title: unitAssessmentRecord.assessment.title,
-        label: 'Resolver evaluacion de unidad',
+        label: 'Resolver evaluación de unidad',
         path: unitAssessmentRecord.path,
       }
     }
@@ -534,7 +534,7 @@ export function obtenerSiguientePasoCurso(courseId, progress) {
       assessmentId: finalAssessmentRecord.assessment.id,
       courseId: course.id,
       title: finalAssessmentRecord.assessment.title,
-      label: 'Resolver evaluacion final',
+      label: 'Resolver evaluación final',
       path: finalAssessmentRecord.path,
     }
   }

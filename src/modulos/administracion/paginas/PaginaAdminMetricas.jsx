@@ -1,5 +1,6 @@
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { useEstadoApp } from '../../progreso/contexto/useEstadoApp.js'
+import { IndicadorAyudaAdmin } from '../componentes/IndicadorAyudaAdmin.jsx'
 import { obtenerMetricasAdmin } from '../selectores/selectoresAdmin.js'
 
 export function PaginaAdminMetricas() {
@@ -42,7 +43,15 @@ export function PaginaAdminMetricas() {
           <p className="font-display text-3xl font-semibold text-foam">{metrics.adminUsers}</p>
         </Tarjeta>
         <Tarjeta className="space-y-2">
-          <p className="text-xs uppercase tracking-[0.24em] text-mute">Ingresos 7 días</p>
+          <div className="flex items-center gap-2">
+            <p className="text-xs uppercase tracking-[0.24em] text-mute">
+              Usuarios únicos con acceso en 7 días
+            </p>
+            <IndicadorAyudaAdmin title="Cómo se cuenta esta tarjeta" align="right" side="top">
+              Cuenta usuarios distintos cuyo último acceso ocurrió dentro de los últimos 7 días.
+              Si la misma cuenta entra varias veces, sigue contando solo una vez.
+            </IndicadorAyudaAdmin>
+          </div>
           <p className="font-display text-3xl font-semibold text-foam">
             {metrics.usersWithRecentSignIn}
           </p>

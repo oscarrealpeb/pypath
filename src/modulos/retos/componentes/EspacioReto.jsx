@@ -49,26 +49,26 @@ function getRuntimeMeta(challenge) {
       usesRealPython,
       eyebrow: 'Python real en navegador',
       description:
-        'Esta mision si se ejecuta de verdad. Veras la salida real de tu codigo antes de validar.',
+        'Esta misión sí se ejecuta de verdad. Verás la salida real de tu código antes de validar.',
       outputLabel: 'Salida real',
-      idleCopy: 'Pulsa Ejecutar para correr tu solucion y ver la consola real de Python.',
+      idleCopy: 'Pulsa Ejecutar para correr tu solución y ver la consola real de Python.',
       loadingTitle: 'Preparando Python',
-      loadingOutput: 'Cargando el runtime y ejecutando tu solucion...',
+      loadingOutput: 'Cargando el runtime y ejecutando tu solución...',
       loadingDetails:
-        'La primera ejecucion puede tardar unos segundos porque el navegador descarga Python.',
+        'La primera ejecución puede tardar unos segundos porque el navegador descarga Python.',
     }
   }
 
   return {
     usesRealPython,
-    eyebrow: 'Revision guiada',
+    eyebrow: 'Revisión guiada',
     description:
-      'Esta mision depende de una biblioteca visual. Aqui revisamos la estructura clave del codigo y te mostramos el comportamiento esperado.',
+      'Esta misión depende de una biblioteca visual. Aquí revisamos la estructura clave del código y te mostramos el comportamiento esperado.',
     outputLabel: 'Vista previa guiada',
     idleCopy: 'Pulsa Ejecutar para ver una vista previa del comportamiento esperado.',
     loadingTitle: 'Revisando estructura',
-    loadingOutput: 'Analizando tu solucion...',
-    loadingDetails: 'Comprobamos si ya estan las piezas importantes de la mision.',
+    loadingOutput: 'Analizando tu solución...',
+    loadingDetails: 'Comprobamos si ya están las piezas importantes de la misión.',
   }
 }
 
@@ -140,7 +140,7 @@ function construirMensajeEjercicioCompletado({
   }
 
   if (allRequiredResolvedAfterAction) {
-    return `Ejercicio completado. La leccion quedo superada y sumaste ${xp} XP.`
+    return `Ejercicio completado. La lección quedó superada y sumaste ${xp} XP.`
   }
 
   return `Ejercicio completado. Sumaste ${xp} XP y ya puedes seguir con el siguiente paso.`
@@ -152,14 +152,14 @@ function construirMensajeEjercicioRevelado({
   allRequiredResolvedAfterAction,
 }) {
   if (isOptional) {
-    return `Mostramos la solucion y este ejercicio opcional quedo resuelto. Se descontaron ${penaltyXp} XP de tu perfil.`
+    return `Mostramos la solución y este ejercicio opcional quedó resuelto. Se descontaron ${penaltyXp} XP de tu perfil.`
   }
 
   if (allRequiredResolvedAfterAction) {
-    return `Mostramos la solucion y este ejercicio quedo resuelto. Se descontaron ${penaltyXp} XP de tu perfil y la leccion ya cuenta como superada.`
+    return `Mostramos la solución y este ejercicio quedó resuelto. Se descontaron ${penaltyXp} XP de tu perfil y la lección ya cuenta como superada.`
   }
 
-  return `Mostramos la solucion y este ejercicio ya cuenta como resuelto. Se descontaron ${penaltyXp} XP de tu perfil.`
+  return `Mostramos la solución y este ejercicio ya cuenta como resuelto. Se descontaron ${penaltyXp} XP de tu perfil.`
 }
 
 function estaLeccionResueltaTrasAccion(exerciseState, exerciseId) {
@@ -226,7 +226,7 @@ function ExerciseWorkspace({
   const solutionCode = challenge.solutionCode ?? lesson.resources.exampleCode ?? challenge.starterCode
   const solutionNote =
     challenge.solutionNote ??
-    'Comparala con tu intento para entender que pieza faltaba o que detalle debia cambiar.'
+    'Compárala con tu intento para entender qué pieza faltaba o qué detalle debía cambiar.'
   const editorHeight = obtenerAlturaEditor(challenge, solutionCode)
   const currentExerciseResolved = currentExerciseCompleted || currentExerciseRevealed
   const [code, setCode] = useState(challenge.starterCode ?? '')
@@ -324,25 +324,25 @@ function ExerciseWorkspace({
       <Modal open={showRevealDialog} onClose={() => setShowRevealDialog(false)} size="md">
         <div className="space-y-5 p-7 sm:p-8">
           <div className="space-y-3">
-            <p className="eyebrow">Confirmar penalizacion</p>
+            <p className="eyebrow">Confirmar penalización</p>
             <h2 className="font-display text-3xl font-semibold text-foam">
-              Revelar la solucion de este ejercicio?
+              ¿Revelar la solución de este ejercicio?
             </h2>
             <p className="text-mute">
-              Si continuas, este ejercicio quedara resuelto automaticamente y se descontaran{' '}
+              Si continúas, este ejercicio quedará resuelto automáticamente y se descontarán{' '}
               <span className="font-semibold text-foam">{challenge.solutionPenaltyXp ?? 0} XP</span>{' '}
               de tu perfil.
             </p>
           </div>
 
           <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-mute">
-            Esta penalizacion solo se aplica una vez por ejercicio. Si aceptas, podras seguir con
-            la leccion, pero ese XP ya no se recupera automaticamente.
+            Esta penalización solo se aplica una vez por ejercicio. Si aceptas, podrás seguir con
+            la lección, pero ese XP ya no se recupera automáticamente.
           </div>
 
           <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
             <Boton variant="ghost" onClick={() => setShowRevealDialog(false)}>
-              Seguir intentandolo
+              Seguir intentándolo
             </Boton>
             <Boton variant="secondary" onClick={handleConfirmRevealSolution}>
               Revelar y perder XP
@@ -355,7 +355,7 @@ function ExerciseWorkspace({
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="eyebrow">
-              Reto practico {challengesCount > 1 ? `(${challengeIndex + 1}/${challengesCount})` : ''}
+              Reto práctico {challengesCount > 1 ? `(${challengeIndex + 1}/${challengesCount})` : ''}
             </span>
             <span className="status-chip">{challenge.exerciseType}</span>
             <span className="status-chip">{runtimeMeta.eyebrow}</span>
@@ -368,7 +368,7 @@ function ExerciseWorkspace({
 
         <div className="grid gap-4 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-mute">Que debe hacer tu solucion</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-mute">Qué debe hacer tu solución</p>
             <p className="mt-3 text-sm leading-7 text-mute">{challenge.successCriteria}</p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -381,7 +381,7 @@ function ExerciseWorkspace({
           </div>
 
           <div className="rounded-2xl border border-border/80 bg-white/5 p-4">
-            <p className="text-xs uppercase tracking-[0.22em] text-mute">Que se espera ver</p>
+            <p className="text-xs uppercase tracking-[0.22em] text-mute">Qué se espera ver</p>
             <div className="mt-3 rounded-2xl border border-border/70 bg-obsidian/80 p-4 font-mono text-sm text-foam">
               <pre className="whitespace-pre-wrap">{challenge.expectedResult}</pre>
             </div>
@@ -455,7 +455,7 @@ function ExerciseWorkspace({
 
             <div className="mt-3 rounded-2xl border border-border/70 bg-obsidian/80 p-4 font-mono text-sm text-foam">
               <pre className="whitespace-pre-wrap">
-                {executionResult?.output ?? 'Sin ejecucion aun.'}
+                {executionResult?.output ?? 'Sin ejecución aún.'}
               </pre>
             </div>
 
@@ -473,13 +473,13 @@ function ExerciseWorkspace({
           <span className="eyebrow">{isResolved ? 'Ejercicio resuelto' : 'Feedback'}</span>
           {feedback ? (
             <span className={`status-chip ${isResolved ? 'text-primary' : 'text-warning'}`}>
-              {isResolved ? 'Listo para continuar' : 'Aun falta'}
+              {isResolved ? 'Listo para continuar' : 'Aún falta'}
             </span>
           ) : null}
         </div>
 
         <p className="text-mute">
-          {feedback?.message ?? 'Ejecuta la validacion para revisar si tu solucion cumple este ejercicio.'}
+          {feedback?.message ?? 'Ejecuta la validación para revisar si tu solución cumple este ejercicio.'}
         </p>
 
         {(feedback && !currentExerciseResolved && solutionCode) || currentExerciseRevealed ? (
@@ -491,7 +491,7 @@ function ExerciseWorkspace({
                   variant={showSolution ? 'secondary' : 'primary'}
                   onClick={() => setShowSolution((current) => !current)}
                 >
-                  {showSolution ? 'Ocultar solucion' : 'Ver solucion completa'}
+                  {showSolution ? 'Ocultar solución' : 'Ver solución completa'}
                 </Boton>
               ) : (
                 <>
@@ -500,7 +500,7 @@ function ExerciseWorkspace({
                     variant={showSolution ? 'secondary' : 'primary'}
                     onClick={() => setShowRevealDialog(true)}
                   >
-                    Revelar solucion y perder {challenge.solutionPenaltyXp ?? 0} XP
+                    Revelar solución y perder {challenge.solutionPenaltyXp ?? 0} XP
                   </Boton>
                   <Boton type="button" variant="ghost" onClick={() => setShowSolution(false)}>
                     Seguir intentandolo
@@ -512,7 +512,7 @@ function ExerciseWorkspace({
             {showSolution ? (
               <div className="space-y-3">
                 <div className="space-y-2">
-                  <p className="text-xs uppercase tracking-[0.22em] text-mute">Explicacion breve</p>
+                  <p className="text-xs uppercase tracking-[0.22em] text-mute">Explicación breve</p>
                   <p className="text-sm text-mute">{solutionNote}</p>
                 </div>
                 <div className="overflow-hidden rounded-2xl border border-border/80 bg-obsidian/90 p-4">
@@ -527,7 +527,7 @@ function ExerciseWorkspace({
 
         {feedback?.missingKeywords?.length > 0 && !isResolved ? (
           <div className="rounded-2xl border border-warning/30 bg-warning/10 p-4 text-sm text-yellow-100">
-            El validador todavia espera estas pistas: {feedback.missingKeywords.join(', ')}.
+            El validador todavía espera estas pistas: {feedback.missingKeywords.join(', ')}.
           </div>
         ) : null}
 
@@ -572,7 +572,7 @@ export function EspacioReto({ lesson, completionStep, courseId }) {
       <Tarjeta className="space-y-4">
         <p className="eyebrow">Sin reto configurado</p>
         <p className="text-mute">
-          Esta leccion todavia no tiene ejercicios listos para resolver.
+          Esta lección todavía no tiene ejercicios listos para resolver.
         </p>
       </Tarjeta>
     )

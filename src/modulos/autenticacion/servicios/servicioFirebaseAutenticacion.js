@@ -26,6 +26,7 @@ import {
 import {
   asegurarPerfilUsuario,
   buscarPerfilPorNombreVisible,
+  obtenerPerfilUsuario,
 } from './servicioPerfilesFirebase.js'
 import {
   crearNombreCompleto,
@@ -74,7 +75,7 @@ function mapFirebaseError(error) {
     case 'auth/requires-recent-login':
       return 'Por seguridad, vuelve a confirmar tu acceso antes de completar esta acción.'
     case 'permission-denied':
-      return 'No pudimos terminar de crear tu perfil. Revisa la configuración del proyecto e intenta otra vez.'
+      return 'No pudimos validar tu acceso en este momento. Intenta de nuevo.'
     default:
       return 'No pudimos completar el acceso.'
   }
@@ -232,6 +233,13 @@ export async function resolverEmailIngreso(identifier) {
 
 async function sincronizarUltimoAcceso(user, seed = {}) {
   const now = new Date().toISOString()
+  const currentProfile = await obtenerPerfilUsuario(user.uid)
+
+  if (currentProfile?.status === 'disabled') {
+    await signOut(firebaseAuth)
+    throw new Error('Esta cuenta está deshabilitada. Reactívala desde administración.')
+  }
+
   const profile = await asegurarPerfilUsuario(user, {
     ...seed,
     lastLoginAt: now,

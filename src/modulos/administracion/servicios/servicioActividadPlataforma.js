@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  getDocsFromServer,
   limit,
   onSnapshot,
   orderBy,
@@ -98,4 +99,25 @@ export function suscribirActividadPlataforma(onChange, onError, { limitCount = D
     },
     onError,
   )
+}
+
+export async function obtenerActividadPlataformaDesdeServidor({
+  limitCount = DEFAULT_ACTIVITY_LIMIT,
+} = {}) {
+  const activityQuery = query(
+    obtenerColeccionActividad(),
+    orderBy('timestamp', 'desc'),
+    limit(limitCount),
+  )
+  const snapshot = await getDocsFromServer(activityQuery)
+
+  return snapshot.docs.map((eventDoc) => {
+    const data = eventDoc.data()
+
+    return {
+      id: eventDoc.id,
+      ...data,
+      timestamp: normalizarTimestamp(data.timestamp) ?? new Date().toISOString(),
+    }
+  })
 }

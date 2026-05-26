@@ -16,7 +16,7 @@ import {
 } from '../../administracion/servicios/servicioAdminContenido.js'
 import {
   registrarEventoPlataforma,
-  suscribirActividadPlataforma,
+  obtenerActividadPlataformaDesdeServidor,
 } from '../../administracion/servicios/servicioActividadPlataforma.js'
 import {
   actualizarContrasenaUsuarioActual,
@@ -43,8 +43,8 @@ import {
   eliminarPerfilUsuarioYReferencias,
   guardarEstadoAprendizajeUsuario,
   guardarPerfilUsuario,
+  obtenerPerfilesUsuariosDesdeServidor,
   obtenerPerfilUsuario,
-  suscribirPerfilesUsuarios,
 } from '../../autenticacion/servicios/servicioPerfilesFirebase.js'
 import {
   crearNombreCompleto,
@@ -989,8 +989,14 @@ export function ProveedorEstadoApp({ children }) {
       return undefined
     }
 
-    const unsubscribe = suscribirPerfilesUsuarios(
-      (entries) => {
+    let ignore = false
+
+    obtenerPerfilesUsuariosDesdeServidor()
+      .then((entries) => {
+        if (ignore) {
+          return
+        }
+
         const nextUsers = entries.map((entry) => entry.user)
         const nextUserStates = entries.reduce((accumulator, entry) => {
           accumulator[entry.user.id] = entry.state
@@ -1005,13 +1011,14 @@ export function ProveedorEstadoApp({ children }) {
             currentUserId: state.user?.id ?? null,
           },
         })
-      },
-      (error) => {
-        console.error('No pudimos sincronizar la lista de usuarios desde Firestore.', error)
-      },
-    )
+      })
+      .catch((error) => {
+        console.error('No pudimos obtener la lista inicial de usuarios desde Firestore.', error)
+      })
 
-    return unsubscribe
+    return () => {
+      ignore = true
+    }
   }, [shouldSyncAdminUsers, state.authReady, state.firebaseEnabled, state.user])
 
   useEffect(() => {
@@ -1024,8 +1031,14 @@ export function ProveedorEstadoApp({ children }) {
       return undefined
     }
 
-    const unsubscribe = suscribirActividadPlataforma(
-      (entries) => {
+    let ignore = false
+
+    obtenerActividadPlataformaDesdeServidor()
+      .then((entries) => {
+        if (ignore) {
+          return
+        }
+
         persistedActivityIdsRef.current = new Set([
           ...persistedActivityIdsRef.current,
           ...entries.map((entry) => entry.id),
@@ -1035,13 +1048,14 @@ export function ProveedorEstadoApp({ children }) {
           type: 'SYNC_ACTIVITY_FEED',
           payload: entries,
         })
-      },
-      (error) => {
-        console.error('No pudimos sincronizar la actividad de plataforma desde Firestore.', error)
-      },
-    )
+      })
+      .catch((error) => {
+        console.error('No pudimos cargar la actividad de plataforma desde Firestore.', error)
+      })
 
-    return unsubscribe
+    return () => {
+      ignore = true
+    }
   }, [shouldSyncAdminActivity, state.authReady, state.firebaseEnabled, state.user])
 
   useEffect(() => {
@@ -1600,6 +1614,18 @@ export function ProveedorEstadoApp({ children }) {
     },
 
     async setSystemRole(userId, systemRole) {
+      const targetUser = stateRef.current.users.find((user) => user.id === userId)
+
+      if (!targetUser) {
+        throw new Error('No encontramos esa cuenta para actualizar su rol.')
+      }
+
+      if (targetUser.provider !== 'email' && systemRole === 'admin') {
+        throw new Error(
+          'Esta cuenta usa Google. Para darle acceso administrativo, primero necesita una cuenta con correo y contraseña.',
+        )
+      }
+
       const nextUsers = stateRef.current.users.map((user) =>
         user.id === userId ? { ...user, systemRole } : user,
       )

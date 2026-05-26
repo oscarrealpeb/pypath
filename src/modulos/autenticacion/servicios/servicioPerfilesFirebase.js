@@ -4,6 +4,7 @@
   doc,
   getDoc,
   getDocs,
+  getDocsFromServer,
   onSnapshot,
   query,
   runTransaction,
@@ -758,5 +759,26 @@ export function suscribirPerfilesUsuarios(onChange, onError) {
     },
     onError,
   )
+}
+
+export async function obtenerPerfilesUsuariosDesdeServidor() {
+  asegurarFirebaseConfigurado()
+
+  const snapshot = await getDocsFromServer(collection(firebaseDb, USERS_COLLECTION))
+  const profiles = snapshot.docs
+    .map((profileDoc) => ({
+      id: profileDoc.id,
+      ...profileDoc.data(),
+    }))
+    .sort((left, right) => {
+      const leftTime = new Date(left.createdAt ?? 0).getTime()
+      const rightTime = new Date(right.createdAt ?? 0).getTime()
+      return rightTime - leftTime
+    })
+
+  return profiles.map((profile) => ({
+    user: construirUsuarioAplicacion(null, profile),
+    state: construirEstadoUsuarioDesdePerfil(profile),
+  }))
 }
 

@@ -398,7 +398,7 @@ Qué es:
 - código de referencia que el usuario puede leer antes del reto
 
 Dónde se usa:
-- bloque “Referencia rápida”
+- bloque "Referencia rápida"
 
 ### `supportNote`
 
@@ -414,7 +414,7 @@ Qué es:
 - arreglo de bloques visuales o textuales opcionales
 
 Dónde se usa:
-- sección “Recursos de apoyo” de la lección
+- sección "Recursos de apoyo" de la lección
 
 Esto es lo que vuelve la plantilla versátil.
 
@@ -576,7 +576,7 @@ Dónde se usa:
 
 Regla:
 - describe lo que se ve
-- no pongas solo “imagen 1”
+- no pongas solo "imagen 1"
 
 Buen ejemplo:
 
@@ -591,7 +591,7 @@ Qué es:
 
 Sirve para:
 - remarcar un detalle visual
-- decir “antes del cambio”, “después del cambio”, etc.
+- decir "antes del cambio", "después del cambio", etc.
 
 ### `columnas`
 
@@ -642,7 +642,7 @@ Qué es:
 - lista de pasos concretos que debe seguir la persona
 
 Dónde se usa:
-- bloque “Instrucciones”
+- bloque "Instrucciones"
 
 ### `hint`
 
@@ -650,7 +650,7 @@ Qué es:
 - pista breve sin resolver el reto
 
 Dónde se usa:
-- bloque “Pista útil”
+- bloque "Pista útil"
 
 ## 10. Estructura de `challenge`
 
@@ -974,7 +974,7 @@ bloquesApoyo: [
 
 ## 18. Consejo final
 
-Si una lección te obliga a meter video, documentos, cuatro capturas y tres textos para que “encaje”, probablemente la estructura está mal pensada.
+Si una lección te obliga a meter video, documentos, cuatro capturas y tres textos para que "encaje", probablemente la estructura está mal pensada.
 
 La plantilla está hecha para que uses solo lo necesario:
 

@@ -101,6 +101,94 @@ export const evaluacionesPandasFinanzas = {
         },
       ],
     },
+    'pandas-analisis-datos': {
+      id: 'pandas-analisis-checkpoint',
+      title: 'Evaluación de unidad: Análisis de datos',
+      summary:
+        'Verifica que ya puedes describir, agrupar y trabajar con columnas de fechas en Pandas.',
+      passingScore: 2,
+      successMessage:
+        'Unidad aprobada. Ya puedes pasar a la parte financiera con una base sólida de análisis.',
+      questions: [
+        {
+          id: 'pandas-analisis-q1',
+          prompt: '¿Qué método te da estadísticas resumidas como media, mínimo y máximo de un DataFrame?',
+          options: [
+            { id: 'a', label: 'df.describe()' },
+            { id: 'b', label: 'df.summary()' },
+            { id: 'c', label: 'df.metrics()' },
+          ],
+          correctOptionId: 'a',
+          explanation: 'describe() resume datos numéricos y otras columnas según el tipo de información.',
+        },
+        {
+          id: 'pandas-analisis-q2',
+          prompt: '¿Qué método usas para agrupar registros por una categoría antes de agregarlos?',
+          options: [
+            { id: 'a', label: 'df.groupby()' },
+            { id: 'b', label: 'df.sort_values()' },
+            { id: 'c', label: 'df.join()' },
+          ],
+          correctOptionId: 'a',
+          explanation: 'groupby() permite separar los datos en grupos y luego aplicar sumas, medias u otros cálculos.',
+        },
+        {
+          id: 'pandas-analisis-q3',
+          prompt: '¿Qué función de Pandas ayuda a convertir una columna de texto en fechas reales?',
+          options: [
+            { id: 'a', label: 'pd.to_datetime()' },
+            { id: 'b', label: 'pd.date_parse()' },
+            { id: 'c', label: 'pd.make_date()' },
+          ],
+          correctOptionId: 'a',
+          explanation: 'to_datetime() transforma strings con fechas en objetos de fecha interpretables por Pandas.',
+        },
+      ],
+    },
+    'pandas-finanzas-aplicado': {
+      id: 'pandas-finanzas-aplicado-checkpoint',
+      title: 'Evaluación de unidad: Pandas aplicado a Finanzas',
+      summary:
+        'Confirma que ya puedes manipular datos financieros, calcular variaciones y preparar reportes.',
+      passingScore: 2,
+      successMessage:
+        'Unidad aprobada. Ya cierras el recorrido práctico de Pandas con foco en análisis financiero.',
+      questions: [
+        {
+          id: 'pandas-finanzas-q1',
+          prompt: 'En análisis financiero, ¿qué permite calcular pct_change() sobre una serie de precios?',
+          options: [
+            { id: 'a', label: 'La variación porcentual entre periodos consecutivos' },
+            { id: 'b', label: 'La fecha más antigua de la tabla' },
+            { id: 'c', label: 'La moneda de cada activo' },
+          ],
+          correctOptionId: 'a',
+          explanation: 'pct_change() se usa mucho para obtener rendimientos o cambios relativos entre filas consecutivas.',
+        },
+        {
+          id: 'pandas-finanzas-q2',
+          prompt: '¿Qué herramienta de Pandas es especialmente útil para resumir ingresos y gastos por categoría o mes?',
+          options: [
+            { id: 'a', label: 'pivot_table()' },
+            { id: 'b', label: 'dropna()' },
+            { id: 'c', label: 'head()' },
+          ],
+          correctOptionId: 'a',
+          explanation: 'pivot_table() ayuda a reorganizar y resumir datos para reportes ejecutivos y comparativos.',
+        },
+        {
+          id: 'pandas-finanzas-q3',
+          prompt: 'Si quieres entregar un reporte final generado con Pandas, ¿qué acción suele venir al final del flujo?',
+          options: [
+            { id: 'a', label: 'Exportar el resultado a un archivo como CSV o Excel' },
+            { id: 'b', label: 'Eliminar la tabla original del DataFrame' },
+            { id: 'c', label: 'Cerrar el intérprete de Python sin guardar' },
+          ],
+          correctOptionId: 'a',
+          explanation: 'Exportar el resultado es un cierre natural cuando preparas reportes reutilizables o compartibles.',
+        },
+      ],
+    },
   },
   finalAssessment: {
     id: 'pandas-finanzas-final',

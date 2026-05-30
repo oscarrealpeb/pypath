@@ -245,10 +245,6 @@ export function PaginaAdminUsuarios() {
             <h2 className="mt-4 font-display text-2xl font-semibold text-foam">
               Encuentra cuentas por nombre, correo, rol o estado
             </h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-mute">
-              Esta vista reutiliza los datos ya sincronizados del panel para no disparar lecturas
-              extra en Firebase por cada filtro o tarjeta.
-            </p>
           </div>
 
           <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">

@@ -414,16 +414,21 @@ function UnitEditor({
     title: unit.title,
     summary: unit.summary,
   })
-  const [assessmentDraft, setAssessmentDraft] = useState(() => construirBorradorEvaluacion(assessment))
+  const [assessmentDraft, setAssessmentDraft] = useState(() =>
+    assessment ? construirBorradorEvaluacion(assessment) : null,
+  )
 
   function handleSave() {
     const contentAfterUnit = actualizarUnidadEnContenido(content, courseId, unit.id, unitDraft)
-    const contentAfterAssessment = actualizarEvaluacionUnidadEnContenido(
-      contentAfterUnit,
-      courseId,
-      unit.id,
-      assessmentDraft,
-    )
+    const contentAfterAssessment =
+      assessment && assessmentDraft
+        ? actualizarEvaluacionUnidadEnContenido(
+            contentAfterUnit,
+            courseId,
+            unit.id,
+            assessmentDraft,
+          )
+        : contentAfterUnit
 
     onReplaceContent(contentAfterAssessment, {
       activityType: 'unit_bundle_updated',
@@ -467,11 +472,12 @@ function UnitEditor({
         />
       </fieldset>
 
-      <fieldset
-        disabled={!isEditable || isSyncing}
-        className="rounded-3xl border border-border/80 bg-white/5 p-5"
-      >
-        <div className="space-y-4">
+      {assessment && assessmentDraft ? (
+        <fieldset
+          disabled={!isEditable || isSyncing}
+          className="rounded-3xl border border-border/80 bg-white/5 p-5"
+        >
+          <div className="space-y-4">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="eyebrow">Evaluación de unidad</p>
@@ -536,8 +542,17 @@ function UnitEditor({
             }
             hint="Usa un arreglo con `id`, `prompt`, `options`, `correctOptionId` y `explanation`. Si el JSON es inválido, se conserva la versión anterior."
           />
+          </div>
+        </fieldset>
+      ) : (
+        <div className="rounded-3xl border border-warning/30 bg-warning/10 p-5 text-sm text-foam">
+          <p className="font-semibold text-foam">Esta unidad no tiene checkpoint configurado.</p>
+          <p className="mt-2 leading-6 text-mute">
+            Puedes editar el título y el resumen de la unidad sin problema. El bloque de
+            evaluación no aparece porque este contenido no trae una evaluación de unidad asociada.
+          </p>
         </div>
-      </fieldset>
+      )}
     </Tarjeta>
   )
 }
@@ -1812,11 +1827,6 @@ export function PaginaAdminContenido() {
           <h1 className="font-display text-4xl font-semibold text-foam">
             CMS de cursos, unidades y lecciones
           </h1>
-          <p className="max-w-3xl text-lg leading-8 text-mute">
-            Aquí queda resuelta la HU23: puedes crear, editar, publicar y borrar contenido
-            usando el mismo formato base que vive en `src/datos/cursos`, para que lo cargado por
-            código y lo gestionado por el CMS sigan siendo compatibles.
-          </p>
         </div>
       </Tarjeta>
 
@@ -1983,9 +1993,9 @@ export function PaginaAdminContenido() {
           </div>
         </Tarjeta>
 
-        {selectedUnit && selectedUnitAssessment ? (
+        {selectedUnit ? (
           <UnitEditor
-            key={effectiveUnitId}
+            key={`${effectiveCourseId}-${effectiveUnitId ?? 'sin-unidad'}`}
             content={content}
             courseId={effectiveCourseId}
             unit={selectedUnit}

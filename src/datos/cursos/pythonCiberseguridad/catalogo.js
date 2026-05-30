@@ -17,6 +17,6 @@ export const catalogoPythonCiberseguridad = {
   interestTags: ['ciberseguridad', 'automatizacion'],
   experienceTags: ['intermedio', 'avanzado'],
   pitch:
-    'Una ruta técnica, ética y entendible para usar Python en integridad, autenticidad, tráfico, auditoría y detección sin volver el curso una caricatura de “hacker”.',
+    'Una ruta técnica, ética y entendible para usar Python en integridad, autenticidad, tráfico, auditoría y detección sin volver el curso una caricatura de "hacker".',
   recommendedOrder: 4,
 }

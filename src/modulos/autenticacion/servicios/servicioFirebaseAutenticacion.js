@@ -1,4 +1,4 @@
-﻿import {
+import {
   EmailAuthProvider,
   createUserWithEmailAndPassword,
   deleteUser,

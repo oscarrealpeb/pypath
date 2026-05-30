@@ -1,4 +1,4 @@
-﻿import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { Boton } from '../../../componentes/Boton.jsx'
 import { Tarjeta } from '../../../componentes/Tarjeta.jsx'
 import { BarraProgreso } from '../../../componentes/BarraProgreso.jsx'

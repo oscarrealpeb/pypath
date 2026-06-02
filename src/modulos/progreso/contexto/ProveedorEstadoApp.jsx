@@ -1468,7 +1468,7 @@ export function ProveedorEstadoApp({ children }) {
     },
 
     createCourse(courseName) {
-      const { content, courseId } = crearCursoEnContenido(state.content, courseName)
+      const { content, courseId } = crearCursoEnContenido(stateRef.current.content, courseName)
       dispatch({
         type: 'SET_CONTENT',
         payload: content,
@@ -1483,7 +1483,7 @@ export function ProveedorEstadoApp({ children }) {
     updateCourse(courseId, draft) {
       dispatch({
         type: 'SET_CONTENT',
-        payload: actualizarCursoEnContenido(state.content, courseId, draft),
+        payload: actualizarCursoEnContenido(stateRef.current.content, courseId, draft),
         meta: {
           activityType: 'course_updated',
           payload: { courseId },
@@ -1494,7 +1494,7 @@ export function ProveedorEstadoApp({ children }) {
     deleteCourse(courseId) {
       dispatch({
         type: 'SET_CONTENT',
-        payload: eliminarCursoEnContenido(state.content, courseId),
+        payload: eliminarCursoEnContenido(stateRef.current.content, courseId),
         meta: {
           activityType: 'course_deleted',
           payload: { courseId },
@@ -1513,7 +1513,7 @@ export function ProveedorEstadoApp({ children }) {
     toggleCoursePublication(courseId) {
       dispatch({
         type: 'SET_CONTENT',
-        payload: alternarPublicacionCursoEnContenido(state.content, courseId),
+        payload: alternarPublicacionCursoEnContenido(stateRef.current.content, courseId),
         meta: {
           activityType: 'course_publication_toggled',
           payload: { courseId },
@@ -1522,7 +1522,11 @@ export function ProveedorEstadoApp({ children }) {
     },
 
     createUnit(courseId, unitName) {
-      const { content, unitId } = crearUnidadEnContenido(state.content, courseId, unitName)
+      const { content, unitId } = crearUnidadEnContenido(
+        stateRef.current.content,
+        courseId,
+        unitName,
+      )
       dispatch({
         type: 'SET_CONTENT',
         payload: content,
@@ -1537,7 +1541,7 @@ export function ProveedorEstadoApp({ children }) {
     updateUnit(courseId, unitId, patch) {
       dispatch({
         type: 'SET_CONTENT',
-        payload: actualizarUnidadEnContenido(state.content, courseId, unitId, patch),
+        payload: actualizarUnidadEnContenido(stateRef.current.content, courseId, unitId, patch),
         meta: {
           activityType: 'unit_updated',
           payload: { courseId, unitId },
@@ -1548,7 +1552,7 @@ export function ProveedorEstadoApp({ children }) {
     deleteUnit(courseId, unitId) {
       dispatch({
         type: 'SET_CONTENT',
-        payload: eliminarUnidadEnContenido(state.content, courseId, unitId),
+        payload: eliminarUnidadEnContenido(stateRef.current.content, courseId, unitId),
         meta: {
           activityType: 'unit_deleted',
           payload: { courseId, unitId },
@@ -1559,7 +1563,12 @@ export function ProveedorEstadoApp({ children }) {
     updateUnitAssessment(courseId, unitId, draft) {
       dispatch({
         type: 'SET_CONTENT',
-        payload: actualizarEvaluacionUnidadEnContenido(state.content, courseId, unitId, draft),
+        payload: actualizarEvaluacionUnidadEnContenido(
+          stateRef.current.content,
+          courseId,
+          unitId,
+          draft,
+        ),
         meta: {
           activityType: 'unit_assessment_updated',
           payload: { courseId, unitId },
@@ -1570,7 +1579,11 @@ export function ProveedorEstadoApp({ children }) {
     updateFinalAssessment(courseId, draft) {
       dispatch({
         type: 'SET_CONTENT',
-        payload: actualizarEvaluacionFinalEnContenido(state.content, courseId, draft),
+        payload: actualizarEvaluacionFinalEnContenido(
+          stateRef.current.content,
+          courseId,
+          draft,
+        ),
         meta: {
           activityType: 'final_assessment_updated',
           payload: { courseId },
@@ -1579,7 +1592,12 @@ export function ProveedorEstadoApp({ children }) {
     },
 
     createLesson(courseId, unitId, lessonName) {
-      const { content, lessonId } = crearLeccionEnContenido(state.content, courseId, unitId, lessonName)
+      const { content, lessonId } = crearLeccionEnContenido(
+        stateRef.current.content,
+        courseId,
+        unitId,
+        lessonName,
+      )
       dispatch({
         type: 'SET_CONTENT',
         payload: content,
@@ -1594,7 +1612,13 @@ export function ProveedorEstadoApp({ children }) {
     updateLesson(courseId, unitId, lessonId, draft) {
       dispatch({
         type: 'SET_CONTENT',
-        payload: actualizarLeccionEnContenido(state.content, courseId, unitId, lessonId, draft),
+        payload: actualizarLeccionEnContenido(
+          stateRef.current.content,
+          courseId,
+          unitId,
+          lessonId,
+          draft,
+        ),
         meta: {
           activityType: 'lesson_updated',
           payload: { courseId, unitId, lessonId },
@@ -1605,7 +1629,12 @@ export function ProveedorEstadoApp({ children }) {
     deleteLesson(courseId, unitId, lessonId) {
       dispatch({
         type: 'SET_CONTENT',
-        payload: eliminarLeccionEnContenido(state.content, courseId, unitId, lessonId),
+        payload: eliminarLeccionEnContenido(
+          stateRef.current.content,
+          courseId,
+          unitId,
+          lessonId,
+        ),
         meta: {
           activityType: 'lesson_deleted',
           payload: { courseId, unitId, lessonId },
@@ -1711,5 +1740,4 @@ export function ProveedorEstadoApp({ children }) {
     </ContextoEstadoApp.Provider>
   )
 }
-
 

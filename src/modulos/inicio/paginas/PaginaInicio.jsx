@@ -481,11 +481,8 @@ export function PaginaInicio() {
             <div className="space-y-3">
               <p className="eyebrow">Catálogo</p>
               <h2 className="font-display text-3xl font-semibold text-foam">
-                Cursos llamativos, útiles y con prerrequisitos visibles
+                Cursos disponibles para todos los intereses y niveles
               </h2>
-              <p className="max-w-3xl text-mute">
-                Ahora las cards funcionan como puertas de exploración: flotan al pasar el mouse y, al hacer clic, te muestran el curso con sus unidades antes de pedir acceso.
-              </p>
             </div>
 
             <div className="grid gap-6 xl:grid-cols-2">

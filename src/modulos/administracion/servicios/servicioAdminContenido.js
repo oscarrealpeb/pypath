@@ -851,7 +851,13 @@ function cloneContent(content) {
 
 export function crearCursoEnContenido(content, courseName) {
   const nextContent = cloneContent(content)
-  const allCourseIds = nextContent.cursos.map((course) => course.id)
+  const allCourseIds = normalizarListaIds([
+    ...nextContent.cursos.map((course) => course.id),
+    ...nextContent.catalogoCursos.map((course) => course.id),
+    ...Object.keys(nextContent.evaluacionesCursos ?? {}),
+    ...Object.keys(nextContent.cursosBorrador ?? {}),
+    ...(nextContent.cursosEliminadosCms ?? []),
+  ])
   const template = crearPlantillaCurso(courseName, allCourseIds)
   nextContent.cursos.push(template.course)
   nextContent.catalogoCursos.push(template.meta)
